@@ -27,4 +27,6 @@
 - Người sống offline giữ ghế/bài và pause; người bị loại offline không pause. Host rời chủ động chuyển quyền cho người online hoặc giữ cờ chuyển khi thành viên hợp lệ quay lại; cả nhóm rớt mạng thụ động vẫn giữ chủ cũ. Hủy/kết thúc về lobby, xóa ready, đổi capacity không dưới số ghế và bắt đầu ID mới.
 - Client nối lại khi tab trở lại hoặc pong quá hạn, không dựa vào bảo đảm frame đóng của runtime. Chrome CDP ngừng JavaScript một tab rồi cho trở lại xác minh đúng bài/lượt mà không reload. UI có pause/countdown đóng băng, action khóa, host cancel, Quay lại ghế và thông báo phòng hết hạn.
 
-**Giới hạn:** chưa commit/push/deploy, chưa kiểm thử điện thoại/Safari thật, hibernation sau eviction/khôi phục qua deploy hoặc quota/CPU production. TTL dùng fixture timestamp đã cũ, không chạy liên tục 7 ngày. Schema tương thích đã kiểm tra cho snapshot Phase 2 không phiên bản; phiên bản schema/luật lạ bị từ chối chứ không tự chuyển đổi. Phase 4–6 vẫn chưa triển khai.
+**Bàn giao GitHub — 05/10/2026:** đã commit/push Phase 2–3 cùng bàn B và các bản sửa lên `origin/main`; xem [PROGRESS](PROGRESS.md) cho commit và trạng thái hiện tại.
+
+**Giới hạn:** chưa deploy, chưa kiểm thử điện thoại/Safari thật, hibernation sau eviction/khôi phục qua deploy hoặc quota/CPU production. TTL dùng fixture timestamp đã cũ, không chạy liên tục 7 ngày. Schema tương thích đã kiểm tra cho snapshot Phase 2 không phiên bản; phiên bản schema/luật lạ bị từ chối chứ không tự chuyển đổi. Chưa nghiệm thu toàn bộ Phase 4; Phase 5–6 chưa bắt đầu.

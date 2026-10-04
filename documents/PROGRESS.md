@@ -5,7 +5,7 @@
 - **Phase hiện tại:** Phase 2–3 hoàn thành nghiệm thu local; đã triển khai bàn oval B theo yêu cầu riêng thuộc Phase 4, chưa nghiệm thu toàn bộ Phase 4.
 - **Đã có:** multiplayer, bài kín, lưu/khôi phục mọi giai đoạn, pause/resume, heartbeat/alarm, hủy/tái đấu, expiry và bàn chơi riêng; đã sửa giữ lựa chọn sau rút và tự Nope. 163 test Vitest (96 luật + 67 phòng) và 23 test Playwright đạt, retries 0; TypeScript/build/format/dry-run đạt.
 - **Giới hạn bằng chứng:** runtime Cloudflare local và mobile Chrome mô phỏng; chưa deploy, kiểm thử điện thoại/Safari thật, quota/CPU/hibernation sau eviction production hoặc khôi phục qua deploy. Không dùng bản thử làm bản phát hành công khai.
-- **Bàn giao:** Phase 2–3, bàn B và các bản sửa là thay đổi local, chưa commit/push/deploy. Dev server bản mới ở `http://127.0.0.1:5173/`; nếu dùng preview cần build và khởi động lại frontend/Worker cùng phiên bản. Giữ `.wrangler/state/v3/`.
+- **Bàn giao:** Phase 2–3, bàn B và các bản sửa đã commit/push lên `origin/main`: [2323af4](https://github.com/thethien8a/Exploding-Kitten/commit/2323af4b2b4565088ebfd5ba986ae65664123b98). Chưa deploy. Dev server bản mới ở `http://127.0.0.1:5173/`; nếu dùng preview cần build và khởi động lại frontend/Worker cùng phiên bản. Giữ `.wrangler/state/v3/`.
 
 ## Theo dõi phase
 
@@ -15,8 +15,8 @@ Trạng thái dùng: **chưa bắt đầu**, **đang thực hiện**, **chờ ki
 | --- | --- | --- | --- |
 | 0 — Nền tảng | Hoàn thành (đã push) | Kiểm tra lại: `2 passed (9.6s)`; TypeScript/build/format đạt; push `main` thành công | Quota và hibernation production chưa kiểm chứng |
 | 1 — Game engine | Hoàn thành | `92 passed`; 36 ván tới thắng; TypeScript/build/format đạt; hồi quy nền `2 passed (8.3s)` | Đã nối vào multiplayer ở Phase 2; không đổi luật/engine trong Phase 2–3 |
-| 2 — Multiplayer | Hoàn thành (local) | `134 passed`; Playwright `7 passed (27.2s)`; 3/4/5 phiên độc lập, payload riêng, chống trùng, quyền, deadline và rate limit | Chưa commit/push/deploy; recovery đã nghiệm thu tiếp ở Phase 3 |
-| 3 — Khôi phục | Hoàn thành (local) | `153 passed`; Playwright `19 passed`, retries 0; restart 5 giai đoạn, mất ACK rút/xáo, rollback SQLite, heartbeat, pause, vòng đời, migration và TTL | Chưa commit/push/deploy; điện thoại/hibernation production chưa thử; tiếp theo Phase 4 |
+| 2 — Multiplayer | Hoàn thành (local, đã push) | `134 passed`; Playwright `7 passed (27.2s)`; 3/4/5 phiên độc lập, payload riêng, chống trùng, quyền, deadline và rate limit | Chưa deploy; recovery đã nghiệm thu tiếp ở Phase 3 |
+| 3 — Khôi phục | Hoàn thành (local, đã push) | `153 passed`; Playwright `19 passed`, retries 0; restart 5 giai đoạn, mất ACK rút/xáo, rollback SQLite, heartbeat, pause, vòng đời, migration và TTL | Chưa deploy; điện thoại/hibernation production chưa thử; tiếp theo Phase 4 |
 | 4 — Giao diện | Đang thực hiện (phần bàn B đạt local) | `163 passed`; Playwright `23 passed`; bàn 3/4/5 ghế, combo/Nope công khai, reset lựa chọn sau rút, chặn tự Nope và recovery; đã inspect ảnh render | Chưa nghiệm thu toàn bộ UX/điện thoại thật |
 | 5 — Kiểm thử nhóm | Chưa bắt đầu | Chưa có | Chờ phase 4 |
 | 6 — Deploy | Chưa bắt đầu | Chưa có | Chờ phase 5 và chấp thuận thao tác deploy |
@@ -268,6 +268,12 @@ Hạn mức công bố khi kiểm tra: Worker động 100.000 request/ngày, 10 
 - **Bằng chứng:** `.amp/in/artifacts/nope-before-fix.log`, `nope-unit-test.log`, `nope-focused-test.log`, `nope-final-test.log`, `nope-format.log`, `nope-dry-run.log`; ảnh đã inspect `nope-own-action-desktop.png`, `nope-own-nope-mobile.png` tại artifacts.
 - **Bàn giao:** thay đổi local, chưa commit/push/deploy; dev 5173 HTTP 200, giữ dữ liệu thủ công. Runtime 8788 và SQLite test đã đóng/dọn; cấu hình Serena tạm trả về `language_servers: []` và giữ CRLF. Giới hạn điện thoại/production không đổi.
 - **Một bước tiếp theo:** người dùng thử lại hai thao tác trên ván local; chưa tự mở rộng Phase 4 hoặc deploy.
+
+### 05/10/2026 — Push mã theo yêu cầu người dùng
+
+- `git fetch origin` xác nhận nhánh local và remote không lệch; đã commit/push 16 file Phase 2–3, bàn B, sửa lựa chọn sau rút và tự Nope lên `origin/main`: [2323af4](https://github.com/thethien8a/Exploding-Kitten/commit/2323af4b2b4565088ebfd5ba986ae65664123b98).
+- Bản mã được push đã đạt 163 test Vitest và 23 kịch bản Playwright cùng TypeScript/build/format/dry-run ở lần kiểm chứng trên. Không đưa dữ liệu SQLite, phiên, ảnh/log kiểm thử hoặc metadata Serena vào Git; giữ thay đổi `.gitignore` có sẵn ngoài commit.
+- Chỉ push GitHub, không chạy deploy hoặc nâng gói Cloudflare. Giữ dev 5173 và `.wrangler/state/v3/`; nghiệm thu điện thoại/production chưa đổi. Bước tiếp theo, khi được yêu cầu, là kiểm thử UX còn lại trên thiết bị thật.
 
 ### Mẫu cho lần cập nhật tiếp theo
 
