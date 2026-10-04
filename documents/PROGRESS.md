@@ -3,9 +3,9 @@
 ## Trạng thái hiện tại — 05/10/2026 (Asia/Bangkok)
 
 - **Phase hiện tại:** Phase 2–3 hoàn thành nghiệm thu local; đã triển khai bàn oval B theo yêu cầu riêng thuộc Phase 4, chưa nghiệm thu toàn bộ Phase 4.
-- **Đã có:** multiplayer, bài kín, lưu/khôi phục mọi giai đoạn, pause/resume, heartbeat/alarm, hủy/tái đấu, expiry và bàn chơi riêng; đã sửa giữ lựa chọn sau rút và tự Nope. 163 test Vitest (96 luật + 67 phòng) và 23 test Playwright đạt, retries 0; TypeScript/build/format/dry-run đạt.
+- **Đã có:** multiplayer, bài kín, lưu/khôi phục mọi giai đoạn, pause/resume, heartbeat/alarm, hủy/tái đấu, expiry và bàn chơi riêng; đã sửa giữ lựa chọn sau rút, tự Nope và thông báo mục tiêu Xin Bài/combo. 164 test Vitest (96 luật + 68 phòng) và 24 test Playwright đạt, retries 0; TypeScript/build/format/dry-run đạt.
 - **Giới hạn bằng chứng:** runtime Cloudflare local và mobile Chrome mô phỏng; chưa deploy, kiểm thử điện thoại/Safari thật, quota/CPU/hibernation sau eviction production hoặc khôi phục qua deploy. Không dùng bản thử làm bản phát hành công khai.
-- **Bàn giao:** Phase 2–3, bàn B và các bản sửa đã commit/push lên `origin/main`: [2323af4](https://github.com/thethien8a/Exploding-Kitten/commit/2323af4b2b4565088ebfd5ba986ae65664123b98). Chưa deploy. Dev server bản mới ở `http://127.0.0.1:5173/`; nếu dùng preview cần build và khởi động lại frontend/Worker cùng phiên bản. Giữ `.wrangler/state/v3/`.
+- **Bàn giao:** Phase 2–3, bàn B và các bản sửa đã commit/push lên `origin/main`; bản sửa mã mới nhất [bdcba36](https://github.com/thethien8a/Exploding-Kitten/commit/bdcba366af36e00cc42f1a8d8f6965d8bfdc565c). Chưa deploy. Dev server bản mới ở `http://127.0.0.1:5173/`; nếu dùng preview cần build và khởi động lại frontend/Worker cùng phiên bản. Giữ `.wrangler/state/v3/`.
 
 ## Theo dõi phase
 
@@ -17,7 +17,7 @@ Trạng thái dùng: **chưa bắt đầu**, **đang thực hiện**, **chờ ki
 | 1 — Game engine | Hoàn thành | `92 passed`; 36 ván tới thắng; TypeScript/build/format đạt; hồi quy nền `2 passed (8.3s)` | Đã nối vào multiplayer ở Phase 2; không đổi luật/engine trong Phase 2–3 |
 | 2 — Multiplayer | Hoàn thành (local, đã push) | `134 passed`; Playwright `7 passed (27.2s)`; 3/4/5 phiên độc lập, payload riêng, chống trùng, quyền, deadline và rate limit | Chưa deploy; recovery đã nghiệm thu tiếp ở Phase 3 |
 | 3 — Khôi phục | Hoàn thành (local, đã push) | `153 passed`; Playwright `19 passed`, retries 0; restart 5 giai đoạn, mất ACK rút/xáo, rollback SQLite, heartbeat, pause, vòng đời, migration và TTL | Chưa deploy; điện thoại/hibernation production chưa thử; tiếp theo Phase 4 |
-| 4 — Giao diện | Đang thực hiện (phần bàn B đạt local) | `163 passed`; Playwright `23 passed`; bàn 3/4/5 ghế, combo/Nope công khai, reset lựa chọn sau rút, chặn tự Nope và recovery; đã inspect ảnh render | Chưa nghiệm thu toàn bộ UX/điện thoại thật |
+| 4 — Giao diện | Đang thực hiện (phần bàn B đạt local) | `164 passed`; Playwright `24 passed`; bàn 3/4/5 ghế, bài/người/mục tiêu công khai, reset lựa chọn sau rút, chặn tự Nope và recovery; đã inspect ảnh render | Chưa nghiệm thu toàn bộ UX/điện thoại thật |
 | 5 — Kiểm thử nhóm | Chưa bắt đầu | Chưa có | Chờ phase 4 |
 | 6 — Deploy | Chưa bắt đầu | Chưa có | Chờ phase 5 và chấp thuận thao tác deploy |
 
@@ -274,6 +274,16 @@ Hạn mức công bố khi kiểm tra: Worker động 100.000 request/ngày, 10 
 - `git fetch origin` xác nhận nhánh local và remote không lệch; đã commit/push 16 file Phase 2–3, bàn B, sửa lựa chọn sau rút và tự Nope lên `origin/main`: [2323af4](https://github.com/thethien8a/Exploding-Kitten/commit/2323af4b2b4565088ebfd5ba986ae65664123b98).
 - Bản mã được push đã đạt 163 test Vitest và 23 kịch bản Playwright cùng TypeScript/build/format/dry-run ở lần kiểm chứng trên. Không đưa dữ liệu SQLite, phiên, ảnh/log kiểm thử hoặc metadata Serena vào Git; giữ thay đổi `.gitignore` có sẵn ngoài commit.
 - Chỉ push GitHub, không chạy deploy hoặc nâng gói Cloudflare. Giữ dev 5173 và `.wrangler/state/v3/`; nghiệm thu điện thoại/production chưa đổi. Bước tiếp theo, khi được yêu cầu, là kiểm thử UX còn lại trên thiết bị thật.
+
+### 05/10/2026 — Thông báo rõ mục tiêu Xin Bài và combo
+
+- **Tái hiện:** mục tiêu chỉ có trong panel chờ Nope; `lastPlay` và caption ở giữa bàn chỉ ghi người/lá đã đánh. Bốn assertion mới cho Xin Bài, combo 2/3 và restore thất bại vì thiếu `targetId` trước sửa.
+- **Sửa:** metadata công khai lưu `targetId` optional từ action đã được engine xác nhận. Caption mọi ghế ghi “Thảo vừa đánh Xin Bài nhắm vào Minh” hoặc “Thảo vừa đánh combo 2/3 lá Mèo Taco nhắm vào Minh”. Không công bố lá được trao/lấy; Nope hoặc bài không nhắm mục tiêu không mang mục tiêu cũ/client tự khai. Không đổi engine, schema hoặc CSS; snapshot cũ thiếu mục tiêu vẫn render như trước.
+- **Kiểm chứng:** unit đạt `164 passed`; browser tập trung `4 passed (23.1s)`. Toàn bộ `PLAYWRIGHT_CHANNEL=chrome WRANGLER_SEND_METRICS=false npm test` đạt `164 passed` + `24 passed (2.5m)`, retries 0; TypeScript/build/format đạt. Kiểm tra tất cả ghế và public view, restore/replay/clone/reset, giữ bí mật lá chuyển, target không bị gắn nhầm vào Skip/Nope. Browser thật kiểm tra cả combo 2/3 và Xin Bài sau restart; UI fixture cũ không có `targetId` giữ caption cũ.
+- **Render:** đã inspect Xin Bài, combo 2/3 trên mobile 390px và combo desktop; actor/mục tiêu đầy đủ, caption xuống dòng đúng, không clipping/chồng ghế. Ảnh minh họa không thay bằng chứng DOM/Worker.
+- **Đóng gói/log:** dry-run đạt, Worker 39.16 KiB / gzip 10.56 KiB, không upload/deploy; bundle tạm đã dọn. Log có `TypeError: fetch failed` trong ca mất ACK shuffle/restart; test vẫn khôi phục và đạt assertion, chưa xác định riêng nguyên nhân log.
+- **Bằng chứng:** `.amp/in/artifacts/target-announcement-before-fix.log`, `target-announcement-unit.log`, `target-announcement-focused.log`, `target-announcement-final-test.log`, `target-announcement-format.log`, `target-announcement-dry-run.log`; ảnh đã inspect `target-favor-mobile.png`, `target-combo-2-mobile.png`, `target-combo-3-mobile.png`, `target-combo-desktop.png`.
+- **Bàn giao:** đã commit/push bản sửa lên `origin/main`: [bdcba36](https://github.com/thethien8a/Exploding-Kitten/commit/bdcba366af36e00cc42f1a8d8f6965d8bfdc565c). Giữ dev 5173 và dữ liệu thủ công; runtime/SQLite test đã đóng/dọn, cấu hình Serena tạm trở về `language_servers: []` với CRLF. Không deploy; bước tiếp theo là người dùng tải lại tab và thử thao tác nhắm mục tiêu.
 
 ### Mẫu cho lần cập nhật tiếp theo
 
