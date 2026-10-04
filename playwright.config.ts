@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  testMatch: "**/*.spec.ts",
   outputDir: ".amp/in/artifacts/playwright",
   timeout: 90_000,
   workers: 1,

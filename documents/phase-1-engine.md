@@ -5,7 +5,7 @@
 ## Phạm vi luật cần hiện thực
 
 - Bộ gốc **56 lá**: 4 Mèo Nổ, 6 Gỡ Bom, 4 Tấn Công, 4 Bỏ Lượt, 4 Xin Bài, 4 Xáo Bài, 5 Xem Tương Lai, 5 Nope và 5 nhóm mèo × 4 lá. Mã loại bài độc lập tên tiếng Việt hiển thị.
-- Phòng 3, 4 hoặc 5 người: mỗi người nhận **1 Gỡ Bom + 7 lá khác**; chồng rút nhận số Mèo Nổ bằng số người trừ 1. Với 3 người, chỉ thêm **2 Gỡ Bom dư** vào chồng; với 4/5 người, thêm toàn bộ số dư. Kiểm thử độc lập số lá chồng rút sau chia: **29 / 23 / 16** tương ứng 3 / 4 / 5 người.
+- Phòng 3, 4 hoặc 5 người: mỗi người được cấp **1 Gỡ Bom**; với 3 người, thêm **2 Gỡ Bom dư** vào bộ; với 4/5 người, thêm toàn bộ số dư. Sau đó xáo bộ chưa có bom và chia thêm **7 lá ngẫu nhiên** mỗi người (có thể nhận thêm Gỡ Bom), đúng thứ tự bước 3–4 trang 1 PDF 2022. Chồng rút nhận số Mèo Nổ bằng số người trừ 1. Kiểm thử độc lập số lá chồng rút sau chia: **29 / 23 / 16** tương ứng 3 / 4 / 5 người.
 - Chọn người đầu ngẫu nhiên mỗi ván, thứ tự theo ghế. Có thể đánh nhiều lá hoặc không đánh rồi rút để kết thúc một lượt; không giới hạn số bài trên tay. Bỏ lượt kết thúc đúng **một** lượt còn nợ; Tấn Công chuyển 2 lượt, hoặc chuyển số lượt còn nợ + 2 khi đang chịu Tấn Công, kể cả khi đã trả một phần nợ.
 - Mèo Nổ được công khai khi rút: không Gỡ Bom thì loại và đưa bài vào chồng bỏ; có Gỡ Bom thì dùng lá đó, chọn kín vị trí 0..N để cài Mèo Nổ lại. Người cuối cùng còn sống thắng.
 - Xin Bài do **người được chọn** chọn lá cho; Xem Tương Lai chỉ người dùng thấy tối đa 3 lá đầu đúng thứ tự; Xáo Bài thực hiện ở server. Combo 2 lá cùng tên lấy ngẫu nhiên, combo 3 lá cùng tên gọi tên loại muốn lấy; không cộng tác dụng riêng của các lá trong combo. Không tự thêm combo 5 lá từ luật cũ.

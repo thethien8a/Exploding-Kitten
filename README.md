@@ -1,6 +1,6 @@
-# Mèo Nổ — Phase 0
+# Mèo Nổ — Phase 0–1
 
-Prototype kiểm tra nền tảng cho game web tiếng Việt. **Chưa có luật, lá bài hoặc phòng chơi hoàn chỉnh.** Phase 0 chỉ chứng minh mỗi phòng có một giá trị SQLite bền vững, đồng bộ WebSocket và tự kết nối lại sau khi runtime khởi động lại.
+Game web tiếng Việt đang xây theo từng phase. Phase 0 có prototype SQLite/WebSocket/reconnect; Phase 1 có engine TypeScript thuần cho luật Original Edition 2022 và test luật. **Engine chưa nối vào Worker hoặc giao diện: trình duyệt vẫn là màn hình thử bộ đếm, chưa chơi bài được và chưa deploy live.**
 
 [Kế hoạch gốc](meo-no-implementation-plan.md) · [Lộ trình](documents/README.md) · [Kết quả thực tế](documents/PROGRESS.md)
 
@@ -26,16 +26,41 @@ Mở <http://127.0.0.1:4173/?room=thu-nghiem>. Tăng giá trị, dừng server b
 
 Dữ liệu local mặc định nằm trong `.wrangler/state/v3/`, không nằm trong RAM của React hay một biến bộ đếm trên server. Giữ thư mục này khi thử restart; xóa nó sẽ xóa dữ liệu thử local. Test tự động dùng thư mục riêng, không xóa dữ liệu chạy thủ công. `MEONO_STATE_PATH` trong Vite config chỉ để chọn thư mục lưu local khi kiểm thử.
 
+## Engine Phase 1
+
+`shared/engine.ts` không import React, Cloudflare, WebSocket hoặc storage. Trạng thái chỉ gồm object/array/giá trị JSON; mỗi chuyển trạng thái trả bản mới, không sửa đầu vào. Thứ tự `drawPile[0]` là lá trên cùng; `removedCards` giữ các lá bị loại lúc thiết lập để kiểm tra đủ 56 ID.
+
+| API | Hợp đồng |
+| --- | --- |
+| `createDeck()` | 56 lá, ID duy nhất và 13 mã loại bài độc lập tên hiển thị |
+| `createGame(playerIds, random)` | 3/4/5 ghế theo thứ tự đầu vào, xáo/chia và chọn người đầu |
+| `applyCommand(game, command)` | `play`, `draw`, `nope`, `give`, `close_future`, `insert_bomb`; từ chối sai lượt, sai chủ lựa chọn hoặc bài không sở hữu |
+| `resolveReaction(game, random)` | API **server-only** chốt tác dụng theo parity Nope; không phải lệnh client |
+| `getFutureCards(game, playerId)` | Tối đa 3 lá theo thứ tự, chỉ trả khi đúng người đang xem; người khác nhận `[]` |
+
+Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong khoảng từ 0 (bao gồm) đến 1 (không bao gồm). Không cho client truyền seed/kết quả random. Các lỗi luật là `Error` có thông điệp mã như `NOT_YOUR_TURN`, `ACTION_PENDING`, `INVALID_BOMB_POSITION`; adapter sau này dịch thành thông báo tiếng Việt.
+
+- Bài đánh vào discard ngay; tác dụng chỉ bắt đầu sau `resolveReaction`. Nope chỉ được dùng trong `reaction`, có thể chặn Nope hoặc combo, không chặn rút bom/Gỡ Bom.
+- `turn.attacked` phân biệt lượt thường với lượt nợ cuối của Attack: Skip/rút/Gỡ Bom chỉ trả một lượt; Attack khi còn nợ chuyển số lượt còn lại + 2.
+- `favor` chờ người cho chọn lá; `future` chờ người xem đóng; `defuse` giữ bom công khai đang xử lý, chờ người rút cài lại ở vị trí 0..N rồi mới kết thúc một lượt. Không có đồng hồ suy nghĩ trong engine.
+- Gỡ Bom dư được trộn **trước khi chia 7 lá**, đúng bước 3–4 PDF 2022: mỗi người có ít nhất một Gỡ Bom, có thể có thêm. Deck 3/4/5 người vẫn là 29/23/16.
+- Favor/combo nhắm người sống khác mình có tay rỗng không chuyển lá nhưng vẫn mất bài đã đánh; không kẹt chờ cho bài. Đây là quyết định xử lý biên đã ghi ở `documents/PROGRESS.md`, không phải kết luận FAQ chính thức đã xác minh.
+
+**Không gửi `GameState` đầy đủ xuống trình duyệt** vì chứa toàn bộ tay bài/chồng rút. Phase 2–3 sẽ xác thực `playerId`, kiểm tra JSON ngoài mạng, tạo góc nhìn riêng, quản lý bỏ qua/deadline Nope 5 giây, lệnh chống trùng và lưu/khôi phục trạng thái. JSON round-trip trong test engine không thay thế test restart storage thực tế.
+
 ## Kiểm tra
 
 ```sh
 npm run check
 npm run format:check
+npm run test:engine
 npx playwright install chromium
 npm test
 ```
 
-`npm test` tự build rồi khởi tạo runtime Cloudflare local trên cổng **8788**. Hai kịch bản Playwright kiểm tra:
+`npm run test:engine` chỉ chạy Vitest, không cần Chrome, tài khoản Cloudflare hoặc server. Test gồm chia 3/4/5 người, Attack/Skip, bom, mọi action/combo, Nope, tay rỗng, thứ tự bài, lựa chọn riêng, bất biến ID và không sửa trạng thái đầu vào; có 36 ván rút/Gỡ Bom tới thắng với seed cố định.
+
+`npm test` chạy test engine, rồi build và chạy Playwright. `npm run test:e2e` chỉ chạy phần build/Playwright, khởi tạo runtime Cloudflare local trên cổng **8788**. Hai kịch bản kiểm tra:
 
 - Ba browser context độc lập: hai phiên cùng phòng, một phiên ở phòng khác; cập nhật hai chiều và nhiều lần bấm sát nhau.
 - Dừng runtime bằng `await previewServer.close()`, đọc trực tiếp file SQLite bằng `node:sqlite`, tạo runtime mới với cùng dữ liệu/cổng, xác nhận reconnect **không tải lại trang** và vẫn thao tác được.
@@ -69,7 +94,9 @@ Dependency trực tiếp được pin trong `package.json`, dependency bắc c�
 | `src/` | React + TypeScript; giao diện thử tiếng Việt và reconnect có backoff |
 | `worker/index.ts` | Worker định tuyến; mỗi mã phòng là một `GameRoom` Durable Object |
 | `shared/protocol.ts` | Mã phòng và dạng thông điệp dùng chung |
+| `shared/engine.ts` | Engine luật thuần; chưa tích hợp vào Worker/React |
 | `wrangler.jsonc` | Static Assets, binding `GAME_ROOMS`, migration `new_sqlite_classes` |
+| `tests/engine.test.ts`, `vitest.config.ts` | Test luật/inventory/immutability, không nạp plugin Cloudflare |
 | `tests/foundation.spec.ts` | Browser, lưu trữ trên đĩa, restart và kiểm tra transport |
 | `references/original-edition-2022.pdf` | Luật Original Edition 2022 làm chuẩn cho phase sau |
 

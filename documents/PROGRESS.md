@@ -2,10 +2,10 @@
 
 ## Trạng thái hiện tại — 04/10/2026 (Asia/Bangkok)
 
-- **Phase hiện tại:** 0 — hoàn thành điều kiện ra phase ở local; dừng tại đây theo yêu cầu, chưa triển khai Phase 1.
-- **Đã có:** luật Original Edition 2022; scaffold React/TypeScript/Vite + Worker/GameRoom SQLite; dependency/lockfile; hai test trình duyệt đạt trên bản build, có kiểm chứng file SQLite và reconnect không reload trang; README tiếng Việt.
-- **Giới hạn bằng chứng:** tài liệu chính thức xác nhận cấu hình hỗ trợ Workers Free; chưa xác minh tài khoản, thẻ, quota/CPU/hibernation production, quyền push hoặc deploy. Đây chưa phải game chơi được.
-- **Bàn giao:** thay đổi mã nguồn ở local, chưa commit/push/deploy. Preview đang chạy tại `http://127.0.0.1:4173/?room=thu-nghiem`; dữ liệu thủ công ở `.wrangler/state/v3/` được giữ lại.
+- **Phase hiện tại:** 1 — hoàn thành điều kiện ra phase; chưa bắt đầu Phase 2.
+- **Đã có:** nền Phase 0 đã push; engine Original Edition 2022 TypeScript thuần, 92 test luật đạt (gồm 36 ván rút/Gỡ Bom có seed); hai test trình duyệt nền vẫn đạt; TypeScript/build/format/dry-run đạt; README tiếng Việt.
+- **Giới hạn bằng chứng:** tài liệu chính thức xác nhận cấu hình hỗ trợ Workers Free; chưa xác minh tài khoản, thẻ, quota/CPU/hibernation production hoặc deploy. Đây chưa phải game chơi được.
+- **Bàn giao:** engine ở `shared/engine.ts`, test ở `tests/engine.test.ts`; README ghi hợp đồng tích hợp. Preview nền tại `http://127.0.0.1:4173/?room=thu-nghiem` còn chạy; giữ `.wrangler/state/v3/`; chưa deploy.
 
 ## Theo dõi phase
 
@@ -13,9 +13,9 @@ Trạng thái dùng: **chưa bắt đầu**, **đang thực hiện**, **chờ ki
 
 | Phase | Trạng thái | Bằng chứng nghiệm thu | Trở ngại / bước tiếp theo |
 | --- | --- | --- | --- |
-| 0 — Nền tảng | Hoàn thành (local) | `2 passed (6.4s)`; SQLite trên đĩa `[3, 7]`; sau reconnect `[8, 8, 3]`; Free theo tài liệu; build/dry-run đạt | Quota và hibernation production chưa kiểm chứng; không chuyển phase trong buổi này |
-| 1 — Game engine | Chưa bắt đầu | Chưa có | Chờ phase 0 |
-| 2 — Multiplayer | Chưa bắt đầu | Chưa có | Chờ phase 1 |
+| 0 — Nền tảng | Hoàn thành (đã push) | Kiểm tra lại: `2 passed (9.6s)`; TypeScript/build/format đạt; push `main` thành công | Quota và hibernation production chưa kiểm chứng |
+| 1 — Game engine | Hoàn thành | `92 passed`; 36 ván tới thắng; TypeScript/build/format đạt; hồi quy nền `2 passed (8.3s)` | Chưa tích hợp mạng/UI; timer/bỏ qua Nope ở Phase 2–3 |
+| 2 — Multiplayer | Chưa bắt đầu | Chưa có | Bước tiếp theo sau Phase 1 |
 | 3 — Khôi phục | Chưa bắt đầu | Chưa có | Chờ phase 2 |
 | 4 — Giao diện | Chưa bắt đầu | Chưa có | Chờ phase 3 |
 | 5 — Kiểm thử nhóm | Chưa bắt đầu | Chưa có | Chờ phase 4 |
@@ -85,6 +85,46 @@ Hạn mức công bố khi kiểm tra: Worker động 100.000 request/ngày, 10 
 **Dịch vụ/dữ liệu bàn giao:** preview cổng 4173 đang chạy; giữ `.wrangler/state/v3/`. Các thư mục SQLite test/smoke và output dry-run tạm đã dọn. Không commit, push, deploy hoặc nâng gói Cloudflare.
 
 **Một bước tiếp theo:** khi người dùng yêu cầu, bắt đầu Phase 1 — engine thuần TypeScript và kiểm thử luật Original Edition 2022, không mở rộng phạm vi trong Phase 0.
+
+### 04/10/2026 — Push Phase 0 và bắt đầu Phase 1
+
+- Kiểm tra lại `npm run check`, `npm run format:check` và `PLAYWRIGHT_CHANNEL=chrome WRANGLER_SEND_METRICS=false npm test`: đạt, `2 passed (9.6s)`.
+- Commit/push nền Phase 0 lên `origin/main`: [885d444](https://github.com/thethien8a/Exploding-Kitten/commit/885d444e22202c973c915ba58691e47bf93e4871). Đánh dấu PDF là binary trong `.gitattributes` để Git giữ nguyên byte tài liệu luật.
+- Pin Vitest `5.0.3`; [registry](https://registry.npmjs.org/vitest/5.0.3) xác nhận tương thích Node 22.14/Vite 8.3.2; install báo 0 vulnerabilities. Dùng config riêng theo [hướng dẫn Vitest](https://vitest.dev/guide/), không nạp plugin Cloudflare vào test engine.
+- **Đối chiếu luật trước khi code:** PDF local trang 1, bước 3 thêm Gỡ Bom dư **trước** bước 4 chia 7 lá. Sửa diễn giải thứ tự trong kế hoạch để khớp nguồn chuẩn, không đổi luật: mỗi tay có ít nhất một Gỡ Bom, có thể nhận thêm trong 7 lá; deck vẫn 29/23/16.
+- **Mục tiêu hết bài:** PDF cho phép tay 0 lá và chỉ nói “any other player”; tìm FAQ chính thức chưa thấy kết luận riêng cho trường hợp này. Engine cho phép chọn người sống khác mình có 0 lá; Favor/combo chốt thành không chuyển lá, vẫn mất bài đã đánh và không kẹt chờ trao bài. Không gọi đây là quy tắc FAQ đã xác minh.
+- **Ranh giới engine:** lưu trạng thái reaction/favor/future/defuse bằng dữ liệu thuần. `resolveReaction` là API dành cho server, không phải lệnh người chơi. Đồng hồ 5 giây, lựa chọn bỏ qua, phiên, projection payload, storage và pause/resume thuộc Phase 2–3.
+- Khi có nhiều Gỡ Bom, tự dùng lá đầu tiên (cùng loại/tác dụng); hoàn tất một lượt sau khi cài bom. Người nổ mất toàn bộ tay bài; các lượt nợ của họ không chuyển cho người kế tiếp. Lá mèo lẻ chỉ dùng trong combo; cặp/bộ ba Gỡ Bom hoặc Nope là combo có thể bị Nope, không kích hoạt tác dụng riêng.
+- Serena báo `Active language servers: []` và `No language servers available in the manager` cả khi đọc/sửa; không sửa `.serena`, dùng công cụ file và TypeScript để kiểm chứng.
+
+### 04/10/2026 — Phase 1: nghiệm thu engine
+
+**Thực hiện:** thêm `shared/engine.ts`, `tests/engine.test.ts`, config Vitest riêng; pin dependency/lockfile. `npm test` chạy engine rồi test nền; Playwright chỉ nhận `*.spec.ts`, Vitest chỉ nhận `*.test.ts`. Engine không import module nào, không chứa mạng, timer hoặc storage; không sửa UI/Worker hiện có.
+
+| Lệnh / kịch bản | Kết quả quan sát |
+| --- | --- |
+| `npm run check` | TypeScript frontend, shared/engine, Worker, config và test đạt |
+| `npm run test:engine` | `92 passed (92)`, một test file, không server/Chrome; lần kiểm tra riêng 736 ms |
+| `PLAYWRIGHT_CHANNEL=chrome WRANGLER_SEND_METRICS=false npm test` | Engine `92 passed` (767 ms), TypeScript/build đạt, Playwright `2 passed (8.3s)`, retries 0 |
+| `npm run format:check` | `All matched files use Prettier code style!` |
+| `WRANGLER_SEND_METRICS=false npx wrangler deploy --dry-run --outdir .amp/in/phase-1-dry-run` | Binding `GAME_ROOMS`/`ASSETS`, bundle 2.63 KiB; `--dry-run: exiting now.`, không upload; đã dọn thư mục bundle tạm |
+| `curl` tới preview cổng 4173 | HTTP 200; giữ preview và dữ liệu thủ công |
+
+**Điều kiện ra phase — đạt ở phạm vi engine:**
+
+- Bộ 56 lá, 3/4/5 ghế, deck 29/23/16 và Gỡ Bom dư trộn trước khi chia được kiểm tra bằng số lượng độc lập từ PDF; nguồn random inject, có seed tái lập.
+- Attack 2/4/6, sau rút/Skip/Gỡ Bom còn nợ một lượt chuyển 3, trả hết nợ reset, Skip một lượt, ghế bị loại và vòng ghế đều có expected cụ thể.
+- Bom không/có Gỡ Bom, đầu/giữa/cuối và biên 0 khi chỉ còn bom; bỏ toàn bộ tay khi nổ; người cuối thắng; chọn vị trí/chủ lựa chọn sai bị từ chối.
+- Favor do người cho chọn; tương lai đúng thứ tự tối đa 3 lá chỉ trả qua API cho chủ thao tác; Shuffle có permutation không đối xứng; cặp/bộ ba dùng action/Defuse/Nope bỏ tác dụng riêng, lấy đúng mục tiêu/loại hoặc không lấy gì. Mục tiêu tay rỗng không làm kẹt ván.
+- Nope 0–5 lá chẵn/lẻ, chặn từng action/combo, kể cả combo Gỡ Bom; không chặn bom/Gỡ Bom hay action đã bắt đầu; bài đã dùng vẫn bị bỏ.
+- Mỗi chuyển trạng thái hợp lệ kiểm tra không sửa đầu vào, mỗi ID ở đúng một nơi (kể cả bom đang xử lý), giữ nguyên inventory và các lá bị loại lúc chia. 36 ván 3/4/5 người rút/Gỡ Bom tới người thắng, kiểm tra đủ 56 ID sau từng bước.
+- Reaction/favor/future/defuse có test JSON round-trip và tiếp tục cho kết quả tương đương. Đây là bằng chứng trạng thái thuần, **không phải** nghiệm thu persistence hoặc restart game ở Phase 3.
+
+**Lỗi lần đầu:** TypeScript báo callback `test.each` nhận string thay vì mảng; Vitest `4 failed / 88 passed`. Hai ca ID dùng tuple sai cách; ca vòng ghế rút thiếu lá trong fixture; ca Attack kỳ vọng chuyển ghế sau một lần rút dù còn nợ một lượt. Sửa fixture/kỳ vọng theo luật, giữ nguyên logic engine; không skip/retry/nới assertion. Log đầu được giữ để đối chiếu.
+
+**Bằng chứng local:** `.amp/in/artifacts/phase-1-full-test.log`, `phase-1-format.log`, `phase-1-dry-run.log`, `phase-1-initial-types.log`, `phase-1-initial-engine.log`; Playwright JSON/ảnh hồi quy ở thư mục artifacts hiện có. Artifacts được ignore, không phải file đã xuất bản GitHub. Không thay đổi diện mạo UI trong Phase 1.
+
+**Giới hạn / bước tiếp theo:** engine lưu toàn bộ bài kín nên không được broadcast `GameState`; kiểm tra token/JSON, góc nhìn riêng, bỏ qua/deadline Nope, lệnh chống trùng và pause/storage còn ở Phase 2–3. Bước tiếp theo là Phase 2 — multiplayer; chưa triển khai trong phiên này. Chưa deploy hoặc nâng gói Cloudflare.
 
 ### Mẫu cho lần cập nhật tiếp theo
 

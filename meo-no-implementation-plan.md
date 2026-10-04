@@ -51,8 +51,8 @@ Tổng bộ gốc: 56 lá. Tên tiếng Việt là lựa chọn giao diện; mã
 Thiết lập ván:
 
 1. Tách toàn bộ Mèo Nổ và Gỡ Bom khỏi bộ bài.
-2. Mỗi người nhận 1 Gỡ Bom và 7 lá khác: tổng 8 lá ban đầu, không có Mèo Nổ.
-3. Với 3 người: chỉ cho 2 Gỡ Bom dư vào chồng rút, loại Gỡ Bom dư còn lại. Với 4 hoặc 5 người: cho toàn bộ Gỡ Bom dư vào chồng rút.
+2. Mỗi người nhận 1 Gỡ Bom. Với 3 người: cho 2 Gỡ Bom dư vào bộ, loại Gỡ Bom dư còn lại. Với 4 hoặc 5 người: cho toàn bộ Gỡ Bom dư vào bộ.
+3. Xáo bộ chưa có Mèo Nổ, rồi chia thêm 7 lá mỗi người: tổng 8 lá ban đầu, có thể nhận thêm Gỡ Bom. Thứ tự này được đối chiếu lại ở Phase 1 theo bước 3–4 trang 1 PDF Original Edition 2022.
 4. Cho số Mèo Nổ bằng số người trừ 1 vào chồng rút; loại Mèo Nổ dư.
 5. Xáo chồng rút, chọn ngẫu nhiên người đầu tiên; thứ tự vòng chơi cố định theo vị trí trong phòng.
 

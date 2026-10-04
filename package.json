@@ -11,7 +11,9 @@
     "check": "tsc -p tsconfig.app.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json",
     "build": "npm run check && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "npm run build && playwright test",
+    "test": "npm run test:engine && npm run test:e2e",
+    "test:engine": "vitest run",
+    "test:e2e": "npm run build && playwright test",
     "format:check": "prettier --check src worker shared tests *.ts *.json *.jsonc index.html"
   },
   "dependencies": {
@@ -29,6 +31,7 @@
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vite": "8.3.2",
+    "vitest": "5.0.3",
     "wrangler": "4.147.0"
   }
 }
