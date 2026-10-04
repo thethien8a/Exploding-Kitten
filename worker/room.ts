@@ -527,6 +527,11 @@ export class Room {
             id: this.state.version + 1,
             playerId,
             cards: next.discardPile.slice(this.state.game.discardPile.length),
+            ...(action.type === "play" &&
+            next.phase.kind === "reaction" &&
+            "targetId" in next.phase.action
+              ? { targetId: next.phase.action.targetId }
+              : {}),
           };
           this.state.reaction = {
             deadline: now + NOPE_WINDOW_MS,

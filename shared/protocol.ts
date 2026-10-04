@@ -48,7 +48,12 @@ export type RoomSnapshot = {
   hostId: string;
   you: string | null;
   gameId: string | null;
-  lastPlay: null | { id: number; playerId: string; cards: Card[] };
+  lastPlay: null | {
+    id: number;
+    playerId: string;
+    targetId?: string;
+    cards: Card[];
+  };
   pause: null | {
     since: number;
     missingIds: string[];

@@ -15,7 +15,7 @@ npm run dev
 
 Mở <http://127.0.0.1:5173/>. Nhập tên, chọn **3/4/5 người**, bấm **Tạo phòng**, rồi gửi **Link cùng phòng** cho nhóm. Khi đủ người, tất cả bấm **Sẵn sàng**, chủ phòng bấm **Bắt đầu ván**.
 
-Khi bắt đầu, mọi người tự chuyển từ phòng chờ sang **bàn oval riêng**: chồng rút/bài bỏ ở giữa, các ghế xung quanh, ghế của bạn ở dưới và tay bài riêng bên dưới bàn. Lá vừa đánh, cả combo 2/3 lá và Nope, hiện công khai kèm tên người đánh; có hiệu ứng đưa bài ra giữa bàn và hỗ trợ giảm chuyển động. URL phòng và kết nối giữ nguyên, không reload hoặc tạo phòng mới. Tay bài trên điện thoại cuộn ngang để xem đủ các lá.
+Khi bắt đầu, mọi người tự chuyển từ phòng chờ sang **bàn oval riêng**: chồng rút/bài bỏ ở giữa, các ghế xung quanh, ghế của bạn ở dưới và tay bài riêng bên dưới bàn. Lá vừa đánh, cả combo 2/3 lá và Nope, hiện công khai kèm tên người đánh; Xin Bài và combo ghi rõ “nhắm vào” tên người được chọn. Có hiệu ứng đưa bài ra giữa bàn và hỗ trợ giảm chuyển động. URL phòng và kết nối giữ nguyên, không reload hoặc tạo phòng mới. Tay bài trên điện thoại cuộn ngang để xem đủ các lá.
 
 Để mô phỏng ba người trên một máy, dùng Chrome thường, Chrome ẩn danh và Edge, hoặc các profile riêng. **Tab mới trong cùng profile sẽ lấy lại cùng ghế và thay tab cũ**, không tạo thêm người. Phiên bí mật nằm trong localStorage theo phòng; link mời không chứa token. Xóa dữ liệu trình duyệt hoặc đổi thiết bị không lấy lại ghế bằng tên.
 
@@ -72,7 +72,7 @@ Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong 
 
 `ready`, `set_capacity`, `start`, `kick`, `leave` quản lý phòng chờ; `cancel_game` dành cho chủ phòng để về lobby. Trong ván, `leave` giữ ghế, không tự loại người sống. `play`, `draw`, `nope`, `pass`, `give`, `close_future`, `insert_bomb` tích hợp engine. Người bị loại nhận bài công khai và số bài, không nhận tay người sống. Future chỉ gửi đúng người sau khi chốt; ACK không chứa lá chuyển hoặc vị trí cài bom.
 
-Snapshot có `lastPlay` gồm ID diễn biến, người đánh và những lá vừa được đánh vào bài bỏ bởi `play`/`nope`. Không bao gồm bài rút, bài cho nhau, tương lai hoặc vị trí cài bom. Metadata được lưu cùng ván, không cập nhật khi lệnh lỗi/replay; snapshot cũ thiếu trường này vẫn phục hồi, hủy/tái đấu xóa diễn biến cũ. UI không phát lại hiệu ứng khi nhận lại cùng ID hoặc mới mở bàn từ snapshot.
+Snapshot có `lastPlay` gồm ID diễn biến, người đánh và những lá vừa được đánh vào bài bỏ bởi `play`/`nope`; `targetId` optional ghi mục tiêu Xin Bài/combo đã được engine xác nhận, không lấy trực tiếp từ dữ liệu client tự khai. Nope hoặc bài không nhắm mục tiêu không mang theo mục tiêu cũ. Không bao gồm bài rút, bài cho nhau, tương lai hoặc vị trí cài bom. Metadata được lưu cùng ván, không cập nhật khi lệnh lỗi/replay; snapshot cũ thiếu metadata/mục tiêu vẫn phục hồi, hủy/tái đấu xóa diễn biến cũ. UI không phát lại hiệu ứng khi nhận lại cùng ID hoặc mới mở bàn từ snapshot.
 
 Snapshot và journal ACK lưu cùng transaction SQLite trước khi xác nhận. ID lệnh thuộc từng ghế: cùng ID/nội dung trả ACK cũ; đổi nội dung cùng ID bị chặn. Cache trong core giữ 256 kết quả/ghế, nhưng journal SQLite giữ kết quả trước đó để retry không phụ thuộc cache. Phiên bản cũ với ID mới bị từ chối; hai phản ứng cùng phiên bản được tuần tự hóa, lệnh thứ hai phải đọc snapshot mới và gửi ID mới nếu bị `STALE_VERSION`.
 
@@ -102,9 +102,9 @@ npx playwright install chromium
 npm test
 ```
 
-`npm run test:engine` chạy Vitest cho engine và lớp phòng, không cần Chrome, tài khoản Cloudflare hoặc server. **163 test** gồm 96 test luật (có 36 ván tới thắng) và 67 test phòng: quyền/validation, projection, chống trùng, deadline sát biên, pause/recovery, heartbeat, migration, chuyển chủ, hủy/tái đấu, TTL, metadata bài vừa đánh và phân biệt tự Nope/phản Nope.
+`npm run test:engine` chạy Vitest cho engine và lớp phòng, không cần Chrome, tài khoản Cloudflare hoặc server. **164 test** gồm 96 test luật (có 36 ván tới thắng) và 68 test phòng: quyền/validation, projection, chống trùng, deadline sát biên, pause/recovery, heartbeat, migration, chuyển chủ, hủy/tái đấu, TTL, metadata bài vừa đánh/mục tiêu và phân biệt tự Nope/phản Nope.
 
-`npm test` chạy Vitest, rồi build và chạy Playwright. `npm run test:e2e` chỉ chạy phần build/Playwright, khởi tạo runtime Cloudflare local trên cổng **8788**. **23 kịch bản** gồm 7 hồi quy multiplayer và 16 recovery/bàn chơi:
+`npm test` chạy Vitest, rồi build và chạy Playwright. `npm run test:e2e` chỉ chạy phần build/Playwright, khởi tạo runtime Cloudflare local trên cổng **8788**. **24 kịch bản** gồm 7 hồi quy multiplayer và 17 recovery/bàn chơi:
 
 - 3/4/5 browser context độc lập tạo/vào phòng qua UI, ready/start, chuyển sang bàn chơi, nhận 8 lá riêng; ghế của mỗi người ở dưới, không chồng ghế lên deck ở 1280/390/320px; phòng khác không bị thay đổi.
 - Kiểm tra payload mạng không có tay người khác, deck/token; gửi hai lệnh rút cùng ID và lệnh thứ ba cùng phiên bản chỉ rút một lần.
@@ -112,7 +112,7 @@ npm test
 - Origin/token/method sai, JSON/binary/quá dài/giả `playerId` và rate limit không làm đổi ván.
 - Alarm runtime 5 giây chốt action; rút/Gỡ Bom tới loại một người, kiểm tra payload spectator.
 - UI mobile Nope/future/favor/defuse/combo bằng fixture snapshot **chỉ để kiểm tra render và lệnh UI**; kiểm tra tên bài dài nằm trong thẻ và cuộn được đến lá cuối. Không coi fixture là bằng chứng server xử lý luật. Luật mạng được kiểm tra bằng runtime thật và Vitest riêng.
-- UI đánh combo 3 lá rồi Nope qua Worker thật: mọi ghế nhận đúng bài/người đánh, hiệu ứng có giảm chuyển động và không phát lại khi reconnect.
+- UI đánh combo 2/3 lá rồi Nope qua Worker thật: mọi ghế nhận đúng bài/người đánh/mục tiêu, hiệu ứng có giảm chuyển động và không phát lại khi reconnect. Xin Bài giữ thông báo mục tiêu sau restart; không lộ lá được trao và không gắn mục tiêu cũ vào Nope.
 - Rút thành công bỏ chọn toàn bộ lá cũ, cả khi còn lượt nợ hoặc gặp bom; lỗi lưu/reconnect không xóa lựa chọn, thử lại thành công mới reset. Kiểm tra trạng thái `aria-pressed`, viền chọn, panel mục tiêu và khả năng chọn bài lại.
 - UI khóa tự Nope, server từ chối lệnh gửi trực tiếp mà không tiêu bài/đổi cửa sổ; người đánh ban đầu phản Nope được. Restart SQLite giữa chuỗi Nope giữ đúng người vừa phản ứng và quyền của từng người.
 - Đóng và khởi tạo lại production preview với cùng SQLite khi đang lượt thường, Xin Bài, Xem Tương Lai, cài bom và Nope; giữ bài/lượt nợ/phần riêng, không reload trang, rồi thực hiện tiếp thao tác.

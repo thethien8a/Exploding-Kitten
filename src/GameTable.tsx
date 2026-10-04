@@ -151,7 +151,11 @@ export function GameTable({
     ? snapshot.members.find((member) => member.id === play.playerId)?.name +
       " vừa đánh " +
       (play.cards.length > 1 ? "combo " + play.cards.length + " lá " : "") +
-      CARD_NAMES[play.cards[0].type]
+      CARD_NAMES[play.cards[0].type] +
+      (play.targetId
+        ? " nhắm vào " +
+          snapshot.members.find((member) => member.id === play.targetId)?.name
+        : "")
     : lastCard
       ? "Lá bỏ mới nhất · " + CARD_NAMES[lastCard.type]
       : "Bàn đã sẵn sàng. Đến lượt " + currentName + ".";

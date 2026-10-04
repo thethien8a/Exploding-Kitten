@@ -806,6 +806,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         id: 10,
         playerId: "b",
         cards: [{ id: "played-favor", type: "favor" }],
+        ...(state === "future" ? {} : { targetId: "a" }),
       },
       pause: null,
       version: 10,
@@ -930,6 +931,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       await expect(
         page.getByRole("status", { name: "Trạng thái kết nối" }),
       ).toHaveText("Đã kết nối");
+      await expect(page.getByTestId("last-play")).toHaveText(
+        "Minh vừa đánh Xin Bài" + (state === "future" ? "" : " nhắm vào Thảo"),
+      );
       if (state === "reaction")
         await expect(
           page.getByRole("region", { name: "Phản ứng Nope" }),

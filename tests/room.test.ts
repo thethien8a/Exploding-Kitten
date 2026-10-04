@@ -391,7 +391,12 @@ describe("lá vừa đánh công khai", () => {
           ...(count === 3 ? { requestedType: "defuse" as const } : {}),
         }).ok,
       ).toBe(true);
-      const combo = { id: room.state.version, playerId: "a", cards };
+      const combo = {
+        id: room.state.version,
+        playerId: "a",
+        targetId: "b",
+        cards,
+      };
       for (const viewer of ["a", "b", "c", null])
         expect(room.view(viewer).lastPlay).toEqual(combo);
       expect(send(room, "b", { type: "nope", cardId: "nope-1" }).ok).toBe(true);
@@ -411,9 +416,27 @@ describe("lá vừa đánh công khai", () => {
   );
   test("lệnh lỗi và replay ACK sau restart không thay người/lá mới nhất", () => {
     const room = fixture();
-    const command = envelope(room, { type: "play", cardIds: ["skip-1"] });
+    const command = envelope(room, {
+      type: "play",
+      cardIds: ["favor-1"],
+      targetId: "b",
+    });
     const ack = room.process("a", command, 1000, () => 0.37);
     expect(ack.ok).toBe(true);
+    const played = {
+      id: ack.version,
+      playerId: "a",
+      targetId: "b",
+      cards: [{ id: "favor-1", type: "favor" }],
+    };
+    const restoredPlay = new Room(
+      JSON.parse(JSON.stringify(room.state)) as RoomState,
+    );
+    expect(restoredPlay.view("c").lastPlay).toEqual(played);
+    expect(restoredPlay.process("a", command, 1050, () => 0.1)).toEqual(ack);
+    const exposedPlay = restoredPlay.view("a");
+    exposedPlay.lastPlay!.playerId = "c";
+    expect(restoredPlay.view(null).lastPlay).toEqual(played);
     send(room, "b", { type: "nope", cardId: "nope-1" }, 1100);
     const latest = {
       id: room.state.version,
@@ -433,6 +456,17 @@ describe("lá vừa đánh công khai", () => {
     const exposed = restored.view("a");
     exposed.lastPlay!.cards.pop();
     expect(restored.view(null).lastPlay).toEqual(latest);
+  });
+  test("bài không nhắm mục tiêu không công bố target client tự gửi", () => {
+    const room = fixture();
+    expect(
+      send(room, "a", { type: "play", cardIds: ["skip-1"], targetId: "c" }).ok,
+    ).toBe(true);
+    expect(room.view(null).lastPlay).toEqual({
+      id: room.state.version,
+      playerId: "a",
+      cards: [{ id: "skip-1", type: "skip" }],
+    });
   });
   test("snapshot cũ thiếu lastPlay vẫn phục hồi, hủy/tái đấu xóa thông báo cũ", () => {
     const room = fixture();
@@ -500,6 +534,14 @@ describe("góc nhìn riêng và kết quả sau khi chốt", () => {
   test("Xin Bài chờ mục tiêu chọn; ACK và người thứ ba không thấy lá chuyển", () => {
     const room = fixture();
     send(room, "a", { type: "play", cardIds: ["favor-1"], targetId: "b" });
+    const announcement = {
+      id: room.state.version,
+      playerId: "a",
+      targetId: "b",
+      cards: [{ id: "favor-1", type: "favor" }],
+    };
+    for (const viewer of ["a", "b", "c", null])
+      expect(room.view(viewer).lastPlay).toEqual(announcement);
     expect(JSON.stringify(room.view("a"))).not.toContain("taco-1");
     passAll(room);
     expect(room.state.game!.phase).toEqual({
@@ -515,9 +557,7 @@ describe("góc nhìn riêng và kết quả sau khi chốt", () => {
     expect(room.view("a").game!.hand.at(-1)?.id).toBe("taco-1");
     expect(JSON.stringify(result)).not.toContain("taco-1");
     expect(JSON.stringify(room.view("c"))).not.toContain("taco-1");
-    expect(room.view("c").lastPlay?.cards).toEqual([
-      { id: "favor-1", type: "favor" },
-    ]);
+    expect(room.view("c").lastPlay).toEqual(announcement);
   });
   test("bom đang xử lý công khai loại phase nhưng không gửi bomb ID/vị trí cài", () => {
     const room = fixture();

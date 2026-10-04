@@ -441,6 +441,10 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           expect(after.gameId).toBe(saved.gameId);
           expect(after.game).toEqual(before[index].game);
           expect(after.lastPlay).toEqual(before[index].lastPlay);
+          if (phase === "favor")
+            await expect(page.getByTestId("last-play")).toHaveText(
+              "Thảo vừa đánh Xin Bài nhắm vào Minh",
+            );
           await expect(page.locator(".card-arriving")).toHaveCount(0);
           expect(await page.evaluate(() => performance.timeOrigin)).toBe(
             origins[index],
@@ -453,6 +457,12 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           await pages[0].screenshot({
             path: testInfo.outputPath("phase-3-restored-" + phase + ".png"),
             fullPage: true,
+          });
+        if (phase === "favor")
+          await pages[1].screenshot({
+            path: testInfo.outputPath("target-favor-mobile.png"),
+            fullPage: true,
+            animations: "disabled",
           });
         if (phase === "turn") {
           expect((await command(pages[0], { type: "draw" })).ok).toBe(true);
@@ -880,109 +890,128 @@ test("alarm phát hiện tab ngừng JavaScript sau 25 giây; quay lại nối m
   }
 });
 
-test("bàn riêng hiển thị combo/Nope cho mọi ghế và không phát lại khi reconnect", async ({
-  browser,
-  request,
-}, testInfo) => {
-  const { sessions, saved } = await prepare(request, "turn");
-  const game = saved.game!;
-  const hand = game.players[0].hand;
-  for (const pile of [
-    game.drawPile,
-    ...game.players.slice(1).map((player) => player.hand),
-  ]) {
-    while (hand.filter((card) => card.type === "tacocat").length < 3) {
-      const index = pile.findIndex((card) => card.type === "tacocat");
-      if (index < 0) break;
-      const replacement = hand.findIndex(
-        (card) => card.type !== "tacocat" && card.type !== "defuse",
-      );
-      [hand[replacement], pile[index]] = [pile[index], hand[replacement]];
-    }
-  }
-  const combo = hand.filter((card) => card.type === "tacocat").slice(0, 3);
-  expect(combo).toHaveLength(3);
-  const targetHand = game.players[1].hand;
-  if (!targetHand.some((card) => card.type === "nope")) {
-    for (const pile of [game.drawPile, hand, game.players[2].hand]) {
-      const index = pile.findIndex((card) => card.type === "nope");
-      if (index < 0) continue;
-      [targetHand[1], pile[index]] = [pile[index], targetHand[1]];
-      break;
-    }
-  }
-  const nope = targetHand.find((card) => card.type === "nope")!;
-  expect(nope).toBeDefined();
-  await writeStored(saved);
-  await start();
-  const { contexts, pages } = await group(browser, sessions);
-  try {
-    await resumed(pages);
-    await pages[1].emulateMedia({ reducedMotion: "reduce" });
-    const cards = pages[0].getByRole("button", { name: /Mèo Taco/ });
-    for (let index = 0; index < 3; index++) await cards.nth(index).click();
-    await pages[0]
-      .getByLabel("Mục tiêu (Xin Bài / combo)")
-      .selectOption(sessions[1].playerId);
-    await pages[0].getByLabel("Loại bài gọi tên").selectOption("defuse");
-    await pages[0].getByRole("button", { name: "Đánh 3 lá đã chọn" }).click();
-    await expect(pages[0].locator(".card-arriving")).toHaveCount(3);
-    await expect(pages[0].locator(".card-arriving").first()).toHaveCSS(
-      "animation-name",
-      "card-arrive",
-    );
-    await expect(pages[1].locator(".card-arriving")).toHaveCount(3);
-    await expect(pages[1].locator(".card-arriving").first()).toHaveCSS(
-      "animation-name",
-      "none",
-    );
-    for (const page of pages) {
-      await expect(
-        page.getByTestId("public-cards").locator(".table-card"),
-      ).toHaveCount(3);
-      await expect(page.getByTestId("last-play")).toHaveText(
-        "Thảo vừa đánh combo 3 lá Mèo Taco",
-      );
-      expect((await view(page)).lastPlay).toMatchObject({
-        playerId: sessions[0].playerId,
-        cards: combo,
-      });
-    }
-    await pages[0].screenshot({
-      path: testInfo.outputPath("table-combo-desktop.png"),
-      fullPage: true,
-      animations: "disabled",
-    });
-    await pages[1].getByRole("button", { name: "Nope", exact: true }).click();
-    for (const page of pages) {
-      await expect(
-        page.getByTestId("public-cards").locator(".table-card"),
-      ).toHaveCount(1);
-      await expect(page.getByTestId("last-play")).toHaveText(
-        "Minh vừa đánh Chặn — Nope",
-      );
-      expect((await view(page)).lastPlay).toMatchObject({
-        playerId: sessions[1].playerId,
-        cards: [nope],
-      });
-    }
-    await pages[1].screenshot({
-      path: testInfo.outputPath("table-nope-mobile.png"),
-      fullPage: true,
-      animations: "disabled",
-    });
-    const latest = (await view(pages[1])).lastPlay;
-    await pages[2].reload();
-    await resumed(pages);
-    expect((await view(pages[2])).lastPlay).toEqual(latest);
-    await expect(pages[2].getByTestId("last-play")).toHaveText(
-      "Minh vừa đánh Chặn — Nope",
-    );
-    await expect(pages[2].locator(".card-arriving")).toHaveCount(0);
-  } finally {
-    await Promise.all(contexts.map((context) => context.close()));
-  }
-});
+for (const count of [2, 3]) {
+  test(
+    "bàn riêng hiển thị combo " +
+      count +
+      "/Nope và mục tiêu cho mọi ghế, không phát lại khi reconnect",
+    async ({ browser, request }, testInfo) => {
+      const { sessions, saved } = await prepare(request, "turn");
+      const game = saved.game!;
+      const hand = game.players[0].hand;
+      for (const pile of [
+        game.drawPile,
+        ...game.players.slice(1).map((player) => player.hand),
+      ]) {
+        while (hand.filter((card) => card.type === "tacocat").length < count) {
+          const index = pile.findIndex((card) => card.type === "tacocat");
+          if (index < 0) break;
+          const replacement = hand.findIndex(
+            (card) => card.type !== "tacocat" && card.type !== "defuse",
+          );
+          [hand[replacement], pile[index]] = [pile[index], hand[replacement]];
+        }
+      }
+      const combo = hand
+        .filter((card) => card.type === "tacocat")
+        .slice(0, count);
+      expect(combo).toHaveLength(count);
+      const targetHand = game.players[1].hand;
+      if (!targetHand.some((card) => card.type === "nope")) {
+        for (const pile of [game.drawPile, hand, game.players[2].hand]) {
+          const index = pile.findIndex((card) => card.type === "nope");
+          if (index < 0) continue;
+          [targetHand[1], pile[index]] = [pile[index], targetHand[1]];
+          break;
+        }
+      }
+      const nope = targetHand.find((card) => card.type === "nope")!;
+      expect(nope).toBeDefined();
+      await writeStored(saved);
+      await start();
+      const { contexts, pages } = await group(browser, sessions);
+      try {
+        await resumed(pages);
+        await pages[1].emulateMedia({ reducedMotion: "reduce" });
+        const cards = pages[0].getByRole("button", { name: /Mèo Taco/ });
+        for (let index = 0; index < count; index++)
+          await cards.nth(index).click();
+        await pages[0]
+          .getByLabel("Mục tiêu (Xin Bài / combo)")
+          .selectOption(sessions[1].playerId);
+        if (count === 3)
+          await pages[0].getByLabel("Loại bài gọi tên").selectOption("defuse");
+        await pages[0]
+          .getByRole("button", { name: "Đánh " + count + " lá đã chọn" })
+          .click();
+        await expect(pages[0].locator(".card-arriving")).toHaveCount(count);
+        await expect(pages[0].locator(".card-arriving").first()).toHaveCSS(
+          "animation-name",
+          "card-arrive",
+        );
+        await expect(pages[1].locator(".card-arriving")).toHaveCount(count);
+        await expect(pages[1].locator(".card-arriving").first()).toHaveCSS(
+          "animation-name",
+          "none",
+        );
+        for (const page of pages) {
+          await expect(
+            page.getByTestId("public-cards").locator(".table-card"),
+          ).toHaveCount(count);
+          await expect(page.getByTestId("last-play")).toHaveText(
+            "Thảo vừa đánh combo " + count + " lá Mèo Taco nhắm vào Minh",
+          );
+          expect((await view(page)).lastPlay).toMatchObject({
+            playerId: sessions[0].playerId,
+            targetId: sessions[1].playerId,
+            cards: combo,
+          });
+        }
+        await pages[0].screenshot({
+          path: testInfo.outputPath("table-combo-desktop.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        await pages[1].screenshot({
+          path: testInfo.outputPath("target-combo-mobile.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        await pages[1]
+          .getByRole("button", { name: "Nope", exact: true })
+          .click();
+        for (const page of pages) {
+          await expect(
+            page.getByTestId("public-cards").locator(".table-card"),
+          ).toHaveCount(1);
+          await expect(page.getByTestId("last-play")).toHaveText(
+            "Minh vừa đánh Chặn — Nope",
+          );
+          expect((await view(page)).lastPlay).toMatchObject({
+            playerId: sessions[1].playerId,
+            cards: [nope],
+          });
+          expect((await view(page)).lastPlay).not.toHaveProperty("targetId");
+        }
+        await pages[1].screenshot({
+          path: testInfo.outputPath("table-nope-mobile.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        const latest = (await view(pages[1])).lastPlay;
+        await pages[2].reload();
+        await resumed(pages);
+        expect((await view(pages[2])).lastPlay).toEqual(latest);
+        await expect(pages[2].getByTestId("last-play")).toHaveText(
+          "Minh vừa đánh Chặn — Nope",
+        );
+        await expect(pages[2].locator(".card-arriving")).toHaveCount(0);
+      } finally {
+        await Promise.all(contexts.map((context) => context.close()));
+      }
+    },
+  );
+}
 
 test("không tự Nope nhưng được phản Nope của người khác, kể cả sau restart", async ({
   browser,
