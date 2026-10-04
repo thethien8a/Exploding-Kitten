@@ -739,9 +739,8 @@ describe("Nope trước khi action bắt đầu", () => {
       );
       let pending = play(game, "skip");
       for (let index = 0; index < count; index++) {
-        const player = pending.players.find((player) =>
-          player.hand.some((card) => card.type === "nope"),
-        )!;
+        const player =
+          pending.players[index === 4 ? 2 : index % 2 === 0 ? 1 : 0];
         const card = player.hand.find((card) => card.type === "nope")!;
         pending = move(pending, {
           type: "nope",
@@ -766,6 +765,84 @@ describe("Nope trước khi action bắt đầu", () => {
       expect(result.drawPile).toEqual(game.drawPile);
     },
   );
+
+  test.each([1, 2, 3])(
+    "không tự Nope bài vừa đánh, kể cả combo %i lá",
+    (count) => {
+      const game = fixture(
+        [["skip", "tacocat", "tacocat", "tacocat", "nope"], ["nope"], []],
+        ["beard_cat"],
+      );
+      const pending =
+        count === 1
+          ? play(game, "skip")
+          : play(game, "tacocat", {
+              count,
+              targetId: "binh",
+              requestedType: "nope",
+            });
+      const before = structuredClone(pending);
+      expect(() =>
+        applyCommand(pending, {
+          type: "nope",
+          playerId: "an",
+          cardId: game.players[0].hand[4].id,
+        }),
+      ).toThrow("CANNOT_NOPE_YOURSELF");
+      expect(pending).toEqual(before);
+    },
+  );
+
+  test("phản Nope của người khác, không tự Nope liên tiếp, giữ qua JSON", () => {
+    const game = fixture(
+      [["skip", "nope", "nope"], ["nope", "nope"], ["nope"]],
+      ["beard_cat"],
+    );
+    let pending = play(game, "skip");
+    pending = move(pending, {
+      type: "nope",
+      playerId: "binh",
+      cardId: game.players[1].hand[0].id,
+    });
+    pending = JSON.parse(JSON.stringify(pending)) as GameState;
+    const before = structuredClone(pending);
+    expect(() =>
+      applyCommand(pending, {
+        type: "nope",
+        playerId: "binh",
+        cardId: game.players[1].hand[1].id,
+      }),
+    ).toThrow("CANNOT_NOPE_YOURSELF");
+    expect(pending).toEqual(before);
+    pending = move(pending, {
+      type: "nope",
+      playerId: "an",
+      cardId: game.players[0].hand[1].id,
+    });
+    expect(pending.phase).toMatchObject({
+      nopeCount: 2,
+      lastNopePlayerId: "an",
+    });
+    expect(() =>
+      applyCommand(pending, {
+        type: "nope",
+        playerId: "an",
+        cardId: game.players[0].hand[2].id,
+      }),
+    ).toThrow("CANNOT_NOPE_YOURSELF");
+    pending = move(pending, {
+      type: "nope",
+      playerId: "binh",
+      cardId: game.players[1].hand[1].id,
+    });
+    expect(settle(pending).turn).toEqual(game.turn);
+    expect(pending.discardPile.map((card) => card.type)).toEqual([
+      "skip",
+      "nope",
+      "nope",
+      "nope",
+    ]);
+  });
 
   test.each([
     "attack",

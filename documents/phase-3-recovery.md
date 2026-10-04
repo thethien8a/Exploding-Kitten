@@ -16,3 +16,15 @@
 - Khôi phục lượt thường, cửa sổ Nope, đang Xin Bài, Xem Tương Lai, cài bom và trường hợp đã lưu nhưng chưa ACK; không mất/lộ bài hoặc xử lý lại một hành động.
 - Thử rớt mạng chủ phòng/người khác/người bị loại, nhiều người cùng rớt, tab mới thay tab cũ, giữ countdown và quyền chủ phòng theo quy ước.
 - Thử lệnh cạnh tranh với alarm, alarm chạy lại, restart và dọn phòng; ghi kịch bản, kết quả quan sát, giới hạn còn lại vào [PROGRESS.md](PROGRESS.md).
+
+## Kết quả triển khai — 04/10/2026
+
+**Hoàn thành nghiệm thu local:** 153 test Vitest (92 luật + 61 phòng) và 19 kịch bản Playwright (7 hồi quy multiplayer + 12 recovery) đạt, retries 0; TypeScript, build, format và dry-run đạt. [PROGRESS](PROGRESS.md) ghi bằng chứng, những lần thử lỗi và giới hạn; [README](../README.md) ghi cách chơi/thử khôi phục và hợp đồng mạng.
+
+- `worker/room.ts` sở hữu schema 1 / luật `original-2022`, ID ván, pause đóng băng Nope, reconciliation kết nối, quyền/chuyển chủ, hủy/tái đấu và lịch alarm chung. `worker/index.ts` khôi phục trong constructor, tuần tự hóa các mutation, transaction snapshot + ACK + alarm, auto-response heartbeat và dọn storage.
+- Mặc định đã triển khai: heartbeat **10 giây**, phát hiện im lặng **25 giây**, TTL **7 ngày** từ hoạt động thực của người chơi; GET/heartbeat/alarm/replay không gia hạn. Đây là tham số vận hành local, chưa hiệu chỉnh qua điện thoại thật.
+- Restart thực tế kiểm tra turn/favor/future/defuse/Nope với SQLite giữ nguyên, không reload browser, không chia/chọn người đầu lại và vẫn thao tác tiếp. Mất ACK rút hoặc Xáo Bài giữ kết quả lần đầu; lỗi SQLite không báo thành công. Fixture hợp lệ chỉ ghi khi runtime dừng; sau đó chạy Worker/alarm/mạng thật, không coi UI mock là recovery.
+- Người sống offline giữ ghế/bài và pause; người bị loại offline không pause. Host rời chủ động chuyển quyền cho người online hoặc giữ cờ chuyển khi thành viên hợp lệ quay lại; cả nhóm rớt mạng thụ động vẫn giữ chủ cũ. Hủy/kết thúc về lobby, xóa ready, đổi capacity không dưới số ghế và bắt đầu ID mới.
+- Client nối lại khi tab trở lại hoặc pong quá hạn, không dựa vào bảo đảm frame đóng của runtime. Chrome CDP ngừng JavaScript một tab rồi cho trở lại xác minh đúng bài/lượt mà không reload. UI có pause/countdown đóng băng, action khóa, host cancel, Quay lại ghế và thông báo phòng hết hạn.
+
+**Giới hạn:** chưa commit/push/deploy, chưa kiểm thử điện thoại/Safari thật, hibernation sau eviction/khôi phục qua deploy hoặc quota/CPU production. TTL dùng fixture timestamp đã cũ, không chạy liên tục 7 ngày. Schema tương thích đã kiểm tra cho snapshot Phase 2 không phiên bản; phiên bản schema/luật lạ bị từ chối chứ không tự chuyển đổi. Phase 4–6 vẫn chưa triển khai.

@@ -16,3 +16,13 @@
 - 3–5 phiên trình duyệt tách biệt nhận đúng trạng thái; hai phòng không trộn bài hay người; người bị loại vẫn theo dõi được bàn công khai.
 - Tên trùng, sai token, lệnh sai quyền/phiên bản, gửi lại lệnh và bấm hai lần không làm ván đổi sai hoặc lộ bài.
 - Kiểm thử Nope chẵn/lẻ, bỏ qua đủ người, đến sát hạn/đến muộn và nhiều phản ứng cùng lúc. Ghi bằng chứng trong [PROGRESS.md](PROGRESS.md); khả năng sống sót qua restart là tiêu chí của phase 3, chưa suy ra từ kết quả ở đây.
+
+## Kết quả triển khai — 04/10/2026
+
+**Hoàn thành trên local:** 134 test Vitest (92 luật + 42 multiplayer) và 7 test Playwright đạt; TypeScript, build, format và dry-run đạt. Bằng chứng, giới hạn và các lần thử lỗi được ghi trong [PROGRESS.md](PROGRESS.md).
+
+- `worker/room.ts` sở hữu validation, quyền/lobby, tích hợp engine, reaction và góc nhìn riêng. `worker/index.ts` sở hữu auth, WebSocket, SQLite và rate limit; hợp đồng mạng trong `shared/protocol.ts` và [README](../README.md).
+- Snapshot và journal ACK đã lưu transaction SQLite để không phụ thuộc cache/RAM khi dùng hibernation. Đây là nền tích hợp cho Phase 3, chưa có nghiệm thu restart ván hoặc tương thích schema sau deploy.
+- Phản ứng cùng phiên bản được tuần tự hóa: lệnh đầu thắng, lệnh sau bị `STALE_VERSION` và không tiêu bài. Người chơi phải đọc snapshot mới rồi gửi thao tác mới; không tự áp lại lệnh cũ với phiên bản khác.
+- Có UI thử desktop/mobile cho các thao tác bài. UI fixture chỉ kiểm chứng render/lệnh client, không thay test engine/runtime; chưa nghiệm thu UX Phase 4 hoặc điện thoại thật.
+- Tiếp nối đã nghiệm thu local ở [Phase 3](phase-3-recovery.md): pause/resume, heartbeat, alarm bền vững, recovery mọi giai đoạn, rời giữa ván/hủy/tái đấu và dọn phòng/journal. Các kết quả Phase 2 bên trên là mốc kiểm thử trước recovery; xem [PROGRESS](PROGRESS.md) cho trạng thái hiện tại. Chưa commit/push/deploy Phase 2–3.

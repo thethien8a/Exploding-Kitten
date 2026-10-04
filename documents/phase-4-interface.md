@@ -2,6 +2,14 @@
 
 **Mục tiêu:** người chơi thao tác được trọn ván trên trình duyệt máy tính/điện thoại mà không dùng công cụ phát triển. Đọc mục 1, 2.3 và 5 của [kế hoạch gốc](../meo-no-implementation-plan.md); phụ thuộc phase 3.
 
+## Phần đã triển khai theo yêu cầu — 04/10/2026
+
+Người dùng chọn **B — Vòng bạn bè**: sau khi bắt đầu, cả nhóm chuyển sang màn hình bàn oval riêng, chồng bài ở giữa, ghế quanh bàn và tay bài riêng phía dưới. Ghế của người xem luôn ở dưới, giữ thứ tự vòng của phòng; thông tin lượt, số bài, mất kết nối/bị loại nằm trên từng ghế. Lá đánh/combo/Nope xuất hiện công khai kèm người đánh, có hiệu ứng và hỗ trợ giảm chuyển động; reconnect không phát lại diễn biến cũ.
+
+Menu Phòng chứa link mời, rời ván và hủy/về lobby. Giữ các lựa chọn riêng, pause/recovery và luật Phase 2–3; bổ sung nút cài bom đầu/cuối. Render và thao tác đã kiểm tra bằng Chrome desktop và viewport 390/320px, gồm cuộn tay bài, tên dài, combo/Nope và các trạng thái riêng.
+
+Đây là **phần bàn chơi được yêu cầu, không phải hoàn thành toàn bộ Phase 4**. Nghiệm thu thao tác trọn ván trên điện thoại/Safari thật và đánh giá sử dụng với người chơi vẫn còn cần làm. Kết quả, ảnh và giới hạn trong [PROGRESS.md](PROGRESS.md).
+
 ## Màn hình và trạng thái
 
 | Trạng thái | Nội dung / thao tác cần thể hiện |

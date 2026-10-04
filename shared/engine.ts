@@ -27,7 +27,12 @@ type Action = { playerId: string } & (
 
 export type Phase =
   | { kind: "turn" }
-  | { kind: "reaction"; action: Action; nopeCount: number }
+  | {
+      kind: "reaction";
+      action: Action;
+      nopeCount: number;
+      lastNopePlayerId?: string;
+    }
   | { kind: "favor"; playerId: string; targetId: string }
   | { kind: "future"; playerId: string }
   | { kind: "defuse"; playerId: string; bomb: Card }
@@ -239,8 +244,14 @@ export function applyCommand(game: GameState, command: GameCommand): GameState {
       const card = player.hand.find((card) => card.id === command.cardId);
       if (!card) throw new Error("CARD_NOT_IN_HAND");
       if (card.type !== "nope") throw new Error("NOT_A_NOPE");
+      const lastPlayerId =
+        state.phase.nopeCount === 0
+          ? state.phase.action.playerId
+          : state.phase.lastNopePlayerId;
+      if (lastPlayerId === player.id) throw new Error("CANNOT_NOPE_YOURSELF");
       state.discardPile.push(takeCard(player, card.id));
       state.phase.nopeCount++;
+      state.phase.lastNopePlayerId = player.id;
       break;
     }
     case "draw": {
