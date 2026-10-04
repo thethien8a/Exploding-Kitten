@@ -1,0 +1,64 @@
+.serena/
+/node_modules/
+/dist/
+/.wrangler/
+/.amp/in/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# OS-specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs & Temp
+*.log
+*.tmp
+*.bak
+.cache/
+*.pid
+*.seed
+
+# Python (if needed)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+*.egg-info/
+
+# Test coverage
+coverage/
+.coverage
+*.cover
+.nyc_output/
+
+# Build artifacts
+build/
+*.min.js
+*.min.css
+
+# Deployment
+.vercel/
+.netlify/
+
+# Misc
+.sass-cache/
+.eslintcache
