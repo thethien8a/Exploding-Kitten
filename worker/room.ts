@@ -30,7 +30,7 @@ export type Member = {
 };
 export type RoomState = {
   schemaVersion: 1;
-  rulesVersion: "original-2022";
+  rulesVersion: "original-2022" | "original-2022-long";
   gameId: string | null;
   lastActivity: number;
   pause: null | { since: number; remainingNopeMs: number | null };
@@ -40,6 +40,7 @@ export type RoomState = {
   hostId: string;
   hostTransferPending: boolean;
   lastPlay?: RoomSnapshot["lastPlay"];
+  lastBomb?: RoomSnapshot["lastBomb"];
   members: Member[];
   game: GameState | null;
   reaction: null | { deadline: number; passedIds: string[] };
@@ -115,11 +116,15 @@ export function parseCommand(value: unknown): ClientCommand {
     case "insert_bomb":
       if (
         !fields(action, ["type", "position"]) ||
-        !Number.isSafeInteger(action.position) ||
-        (action.position as number) < 0
+        (action.position !== "random" &&
+          (!Number.isSafeInteger(action.position) ||
+            (action.position as number) < 0))
       )
         throw new Error("INVALID_COMMAND");
-      parsed = { type: "insert_bomb", position: action.position as number };
+      parsed = {
+        type: "insert_bomb",
+        position: action.position as number | "random",
+      };
       break;
     case "play":
       if (
@@ -173,13 +178,15 @@ export class Room {
   constructor(saved: RoomState | LegacyRoomState, now = Date.now()) {
     if (
       "schemaVersion" in saved &&
-      (saved.schemaVersion !== 1 || saved.rulesVersion !== "original-2022")
+      (saved.schemaVersion !== 1 ||
+        !["original-2022", "original-2022-long"].includes(saved.rulesVersion))
     )
       throw new Error("UNSUPPORTED_SCHEMA");
     this.state = {
       ...saved,
       schemaVersion: 1,
-      rulesVersion: "original-2022",
+      rulesVersion:
+        "rulesVersion" in saved ? saved.rulesVersion : "original-2022",
       gameId:
         "gameId" in saved
           ? saved.gameId
@@ -189,6 +196,7 @@ export class Room {
       lastActivity: "lastActivity" in saved ? saved.lastActivity : now,
       pause: "pause" in saved ? saved.pause : null,
       lastPlay: saved.lastPlay ?? null,
+      lastBomb: saved.lastBomb ?? null,
       hostTransferPending:
         "hostTransferPending" in saved ? saved.hostTransferPending : false,
       members: saved.members.map((member) => ({
@@ -421,6 +429,7 @@ export class Room {
         this.state.pause = null;
         this.state.hostTransferPending = false;
         this.state.lastPlay = null;
+        this.state.lastBomb = null;
         for (const candidate of this.state.members) candidate.ready = false;
         return;
       case "ready":
@@ -450,7 +459,9 @@ export class Room {
           random,
         );
         this.state.gameId = crypto.randomUUID();
+        this.state.rulesVersion = "original-2022-long";
         this.state.lastPlay = null;
+        this.state.lastBomb = null;
         for (const candidate of this.state.members) candidate.ready = false;
         return;
       case "kick":
@@ -521,7 +532,32 @@ export class Room {
       }
       default: {
         if (!this.state.game) throw new Error("GAME_NOT_STARTED");
-        const next = applyCommand(this.state.game, { ...action, playerId });
+        const next = applyCommand(
+          this.state.game,
+          action.type === "insert_bomb"
+            ? {
+                type: "insert_bomb",
+                playerId,
+                position:
+                  action.position === "random"
+                    ? Math.floor(
+                        random() * (this.state.game.drawPile.length + 1),
+                      )
+                    : action.position,
+              }
+            : { ...action, playerId },
+        );
+        this.state.lastBomb =
+          action.type === "draw" &&
+          this.state.game.drawPile[0]?.type === "exploding_kitten"
+            ? {
+                id: this.state.version + 1,
+                playerId,
+                outcome: next.phase.kind === "defuse" ? "defusing" : "exploded",
+              }
+            : action.type === "insert_bomb"
+              ? { id: this.state.version + 1, playerId, outcome: "defused" }
+              : null;
         if (action.type === "play" || action.type === "nope") {
           this.state.lastPlay = {
             id: this.state.version + 1,
@@ -556,6 +592,7 @@ export class Room {
       you: playerId,
       gameId: state.gameId,
       lastPlay: game ? (state.lastPlay ?? null) : null,
+      lastBomb: game ? (state.lastBomb ?? null) : null,
       pause: state.pause
         ? { ...state.pause, missingIds: this.missingIds() }
         : null,
@@ -575,7 +612,11 @@ export class Room {
             hand: player?.alive ? player.hand : [],
             futureCards: player?.alive ? getFutureCards(game, player.id) : [],
             drawCount: game.drawPile.length,
-            discardPile: game.discardPile,
+            discardPile: game.discardPile.map((card, index) =>
+              card.type === "exploding_kitten"
+                ? { id: "public-explosion-" + index, type: card.type }
+                : card,
+            ),
             turn: game.turn,
             phase:
               game.phase.kind === "defuse"

@@ -14,6 +14,20 @@ export const CARD_COUNTS = {
   rainbow_ralphing_cat: 4,
 } as const;
 
+const EXTRA_CARD_COUNTS = {
+  attack: 2,
+  skip: 3,
+  favor: 2,
+  shuffle: 3,
+  see_future: 2,
+  nope: 2,
+  tacocat: 2,
+  cattermelon: 2,
+  hairy_potato_cat: 2,
+  beard_cat: 2,
+  rainbow_ralphing_cat: 2,
+} as const;
+
 export type CardType = keyof typeof CARD_COUNTS;
 export type Card = { id: string; type: CardType };
 export type Random = () => number;
@@ -106,6 +120,15 @@ export function createGame(playerIds: string[], random: Random): GameState {
   drawPile.push(...returnedDefuses);
   shuffle(drawPile, random);
   for (const player of players) player.hand.push(...drawPile.splice(0, 7));
+  // Thêm sau khi chia để kéo dài chồng rút mà không đổi tay khởi đầu.
+  drawPile.push(
+    ...Object.entries(EXTRA_CARD_COUNTS).flatMap(([type, count]) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `extra-${type}-${index + 1}`,
+        type: type as CardType,
+      })),
+    ),
+  );
   drawPile.push(...bombs.slice(0, players.length - 1));
   shuffle(drawPile, random);
 

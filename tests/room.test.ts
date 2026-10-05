@@ -108,8 +108,9 @@ describe("phòng chờ và quyền", () => {
         room.state.game!.players.map((player) => player.hand.length),
       ).toEqual(Array(capacity).fill(8));
       expect(room.state.game!.drawPile).toHaveLength(
-        { 3: 29, 4: 23, 5: 16 }[capacity],
+        { 3: 53, 4: 47, 5: 40 }[capacity],
       );
+      expect(room.state.rulesVersion).toBe("original-2022-long");
     },
   );
   test("thiếu ghế dù mọi người ready cũng không bắt đầu", () => {
@@ -485,6 +486,156 @@ describe("lá vừa đánh công khai", () => {
   });
 });
 
+describe("Mèo Nổ công khai và cài bom ngẫu nhiên phía server", () => {
+  function defusingRoom() {
+    const room = fixture();
+    const game = room.state.game!;
+    game.turn.playerId = "b";
+    game.drawPile.unshift(game.drawPile.pop()!);
+    expect(send(room, "b", { type: "draw" }).ok).toBe(true);
+    return room;
+  }
+
+  test("mọi góc nhìn nhận người dính bom; lỗi/restart không đổi hoặc lộ bom", () => {
+    const room = defusingRoom();
+    const event = {
+      id: room.state.version,
+      playerId: "b",
+      outcome: "defusing",
+    };
+    expect(
+      send(room, "a", { type: "insert_bomb", position: "random" }).code,
+    ).toBe("NOT_YOUR_CHOICE");
+    const restored = new Room(
+      JSON.parse(JSON.stringify(room.state)) as RoomState,
+    );
+    for (const viewer of ["a", "b", "c", null]) {
+      expect(restored.view(viewer).lastBomb).toEqual(event);
+      expect(JSON.stringify(restored.view(viewer))).not.toMatch(
+        /bomb-4|position/,
+      );
+    }
+    const exposed = restored.view(null);
+    exposed.lastBomb!.playerId = "a";
+    expect(restored.view(null).lastBomb).toEqual(event);
+  });
+
+  test.each([
+    [0, 0],
+    [0.49, 1],
+    [0.999999, 3],
+  ])("random %s cài tại %i trong cả N+1 vị trí", (sample, position) => {
+    const room = defusingRoom();
+    const before = structuredClone(room.state.game!);
+    const command = parseCommand(
+      envelope(room, { type: "insert_bomb", position: "random" }),
+    );
+    const random = vi.fn(() => sample);
+    const ack = room.process("b", command, 1200, random);
+    expect(ack.ok).toBe(true);
+    expect(random).toHaveBeenCalledTimes(1);
+    const inserted = room.state.game!;
+    expect(inserted.drawPile.map((card) => card.id)).toEqual([
+      ...before.drawPile.slice(0, position).map((card) => card.id),
+      "bomb-4",
+      ...before.drawPile.slice(position).map((card) => card.id),
+    ]);
+    expect(inserted.turn).toEqual({
+      playerId: "c",
+      remaining: 1,
+      attacked: false,
+    });
+    const event = { id: ack.version, playerId: "b", outcome: "defused" };
+    for (const viewer of ["a", "b", "c", null]) {
+      expect(room.view(viewer).lastBomb).toEqual(event);
+      expect(
+        JSON.stringify(room.view(viewer)) + JSON.stringify(ack),
+      ).not.toMatch(/bomb-4|position/);
+    }
+    const restored = new Room(
+      JSON.parse(JSON.stringify(room.state)) as RoomState,
+    );
+    const reroll = vi.fn(() => {
+      throw new Error("reroll");
+    });
+    expect(restored.process("b", command, 1300, reroll)).toEqual(ack);
+    expect(reroll).not.toHaveBeenCalled();
+    expect(restored.state.game).toEqual(inserted);
+    expect(restored.view(null).lastBomb).toEqual(event);
+  });
+
+  test("chồng rút rỗng vẫn cài ngẫu nhiên được tại vị trí duy nhất", () => {
+    const room = defusingRoom();
+    room.state.game!.discardPile.push(...room.state.game!.drawPile.splice(0));
+    expect(
+      send(room, "b", { type: "insert_bomb", position: "random" }).ok,
+    ).toBe(true);
+    expect(room.state.game!.drawPile).toEqual([
+      { id: "bomb-4", type: "exploding_kitten" },
+    ]);
+  });
+
+  test.each([false, true])(
+    "công khai người nổ, kể cả khi kết thúc ván=%s",
+    (finishes) => {
+      const room = fixture();
+      const game = room.state.game!;
+      game.drawPile.unshift(game.drawPile.pop()!);
+      if (finishes) {
+        game.players[2].alive = false;
+        game.discardPile.push(...game.players[2].hand.splice(0));
+      }
+      expect(send(room, "a", { type: "draw" }).ok).toBe(true);
+      expect(room.state.game!.phase.kind).toBe(finishes ? "finished" : "turn");
+      const event = {
+        id: room.state.version,
+        playerId: "a",
+        outcome: "exploded",
+      };
+      const restored = new Room(
+        JSON.parse(JSON.stringify(room.state)) as RoomState,
+      );
+      for (const viewer of ["a", "b", "c", null]) {
+        const snapshot = restored.view(viewer);
+        expect(snapshot.lastBomb).toEqual(event);
+        expect(snapshot.members[0].alive).toBe(false);
+        expect(snapshot.game!.discardPile.at(-1)?.type).toBe(
+          "exploding_kitten",
+        );
+        expect(JSON.stringify(snapshot)).not.toContain("bomb-4");
+      }
+      expect(restored.view("a").game!.hand).toEqual([]);
+      if (finishes)
+        expect(restored.state.game!.phase).toEqual({
+          kind: "finished",
+          winnerId: "b",
+        });
+    },
+  );
+
+  test("thông báo hết hiệu lực khi có thao tác tiếp theo hoặc hủy/tái đấu", () => {
+    const room = defusingRoom();
+    send(room, "b", { type: "insert_bomb", position: 3 });
+    expect(room.view(null).lastBomb?.outcome).toBe("defused");
+    expect(send(room, "c", { type: "draw" }).ok).toBe(true);
+    expect(room.view(null).lastBomb).toBeNull();
+    const old = structuredClone(room.state);
+    delete old.lastBomb;
+    expect(new Room(old).view(null).lastBomb).toBeNull();
+    room.state.lastBomb = {
+      id: room.state.version,
+      playerId: "b",
+      outcome: "defused",
+    };
+    expect(send(room, "a", { type: "cancel_game" }).ok).toBe(true);
+    expect(room.state.lastBomb).toBeNull();
+    for (const member of room.state.members)
+      send(room, member.id, { type: "ready", ready: true });
+    expect(send(room, "a", { type: "start" }).ok).toBe(true);
+    expect(room.view(null).lastBomb).toBeNull();
+  });
+});
+
 describe("góc nhìn riêng và kết quả sau khi chốt", () => {
   test("payload whitelist không chứa tay người khác, chồng rút, token, receipts", () => {
     const room = fixture();
@@ -792,7 +943,7 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     expect(send(room, "a", { type: "start" }).ok).toBe(true);
     expect(room.state.gameId).not.toBe("old-game");
     expect(room.state.game!.players).toHaveLength(4);
-    expect(room.state.game!.drawPile).toHaveLength(23);
+    expect(room.state.game!.drawPile).toHaveLength(47);
   });
   test("một alarm ưu tiên Nope, heartbeat, rồi TTL; alarm và GET không gia hạn", () => {
     const room = fixture();
@@ -868,6 +1019,22 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
         "UNSUPPORTED_SCHEMA",
       );
   });
+  test("restart không thêm bài vào ván gốc hoặc ván dài đang chơi", () => {
+    const room = lobby();
+    for (const member of room.state.members)
+      send(room, member.id, { type: "ready", ready: true });
+    expect(send(room, "a", { type: "start" }).ok).toBe(true);
+    expect(new Room(structuredClone(room.state)).state).toEqual(room.state);
+    const classic = structuredClone(room.state);
+    classic.rulesVersion = "original-2022";
+    classic.game!.drawPile = classic.game!.drawPile.filter(
+      (card) => !card.id.startsWith("extra-"),
+    );
+    const restored = new Room(classic);
+    expect(restored.state.rulesVersion).toBe("original-2022");
+    expect(restored.state.game).toEqual(classic.game);
+    expect(restored.state.game!.drawPile).toHaveLength(29);
+  });
 });
 
 describe("validation biên mạng", () => {
@@ -912,6 +1079,18 @@ describe("validation biên mạng", () => {
       id: "x",
       version: 0,
       action: { type: "insert_bomb", position: 1.5 },
+    },
+    {
+      type: "command",
+      id: "x",
+      version: 0,
+      action: { type: "insert_bomb", position: "random", seed: 1 },
+    },
+    {
+      type: "command",
+      id: "x",
+      version: 0,
+      action: { type: "insert_bomb", position: "anything" },
     },
     {
       type: "command",

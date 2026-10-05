@@ -105,7 +105,7 @@ function seededRandom(seed: number): Random {
   };
 }
 
-describe("bộ Original Edition 2022 và chia bài", () => {
+describe("bộ gốc Original Edition 2022 và ván dài", () => {
   test("56 ID duy nhất, đủ 13 loại với số lượng từ PDF", () => {
     const deck = createDeck();
     expect(deck).toHaveLength(56);
@@ -134,9 +134,9 @@ describe("bộ Original Edition 2022 và chia bài", () => {
   });
 
   test.each([
-    { players: 3, deck: 29, bombs: 2, defuses: 5, removed: 3 },
-    { players: 4, deck: 23, bombs: 3, defuses: 6, removed: 1 },
-    { players: 5, deck: 16, bombs: 4, defuses: 6, removed: 0 },
+    { players: 3, deck: 53, bombs: 2, defuses: 5, removed: 3 },
+    { players: 4, deck: 47, bombs: 3, defuses: 6, removed: 1 },
+    { players: 5, deck: 40, bombs: 4, defuses: 6, removed: 0 },
   ])("$players người: chồng $deck lá, $bombs bom", (expected) => {
     const ids = seats.slice(0, expected.players);
     const game = createGame(ids, seededRandom(149));
@@ -145,6 +145,9 @@ describe("bộ Original Edition 2022 và chia bài", () => {
       expect(player.hand).toHaveLength(8);
       expect(player.hand.some((card) => card.type === "defuse")).toBe(true);
       expect(player.hand.some((card) => card.type === "exploding_kitten")).toBe(
+        false,
+      );
+      expect(player.hand.some((card) => card.id.startsWith("extra-"))).toBe(
         false,
       );
       expect(player.alive).toBe(true);
@@ -170,11 +173,33 @@ describe("bộ Original Edition 2022 và chia bài", () => {
     expect(game.turn.remaining).toBe(1);
     expect(game.turn.attacked).toBe(false);
     const cards = inventory(game);
-    expect(cards).toHaveLength(56);
-    expect(new Set(cards.map((card) => card.id)).size).toBe(56);
-    expect(cards).toEqual(
+    expect(cards).toHaveLength(80);
+    expect(new Set(cards.map((card) => card.id)).size).toBe(80);
+    expect(cards.filter((card) => !card.id.startsWith("extra-"))).toEqual(
       createDeck().sort((a, b) => a.id.localeCompare(b.id)),
     );
+    const extra = game.drawPile.filter((card) => card.id.startsWith("extra-"));
+    expect(extra).toHaveLength(24);
+    expect(
+      Object.fromEntries(
+        [...new Set(extra.map((card) => card.type))].map((type) => [
+          type,
+          extra.filter((card) => card.type === type).length,
+        ]),
+      ),
+    ).toEqual({
+      attack: 2,
+      skip: 3,
+      favor: 2,
+      shuffle: 3,
+      see_future: 2,
+      nope: 2,
+      tacocat: 2,
+      cattermelon: 2,
+      hairy_potato_cat: 2,
+      beard_cat: 2,
+      rainbow_ralphing_cat: 2,
+    });
   });
 
   test("Gỡ Bom dư được trộn trước khi chia, không đảm bảo mỗi tay chỉ có một", () => {
@@ -186,7 +211,7 @@ describe("bộ Original Edition 2022 và chia bài", () => {
       game.players[0].hand.filter((card) => card.type === "defuse"),
     ).toHaveLength(2);
     expect(game.players[0].hand).toHaveLength(8);
-    expect(game.drawPile).toHaveLength(29);
+    expect(game.drawPile).toHaveLength(53);
   });
 
   test.each([
@@ -1140,7 +1165,7 @@ describe("bất biến và dữ liệu thuần", () => {
         }
         expect(game.phase.kind).toBe("finished");
         expect(commands).toBeLessThan(100);
-        expect(inventory(game)).toHaveLength(56);
+        expect(inventory(game)).toHaveLength(80);
         expect(
           game.discardPile.filter((card) => card.type === "exploding_kitten"),
         ).toHaveLength(count - 1);

@@ -38,9 +38,6 @@ const CARD_PATHS: Partial<Record<CardType, string>> = {
 function CardFace({ type }: { type: CardType }) {
   return (
     <>
-      <span className="eyebrow">
-        {type === "defuse" ? "BẢO VỆ" : type === "nope" ? "PHẢN ỨNG" : "LÁ BÀI"}
-      </span>
       <svg
         className="card-symbol"
         viewBox="0 0 48 48"
@@ -98,10 +95,26 @@ export function GameTable({
   const game = snapshot.game!;
   const phase = game.phase;
   const me = snapshot.members.find((member) => member.id === session.playerId)!;
+  const giving = phase.kind === "favor" && phase.targetId === me.id;
+  const targetedAction =
+    phase.kind === "favor"
+      ? {
+          type: "favor" as const,
+          playerId: phase.playerId,
+          targetId: phase.targetId,
+        }
+      : phase.kind === "reaction" &&
+          phase.nopeCount % 2 === 0 &&
+          "targetId" in phase.action
+        ? phase.action
+        : null;
+  const requesterName = snapshot.members.find(
+    (member) => member.id === targetedAction?.playerId,
+  )?.name;
   const [selected, setSelected] = useState<string[]>([]);
   const [targetId, setTargetId] = useState("");
   const [requestedType, setRequestedType] = useState<CardType>("defuse");
-  const [position, setPosition] = useState(0);
+  const [position, setPosition] = useState<number | "random">(0);
   const [animatedPlay, setAnimatedPlay] = useState<number | null>(null);
   const previousPlay = useRef(snapshot.lastPlay?.id);
   useEffect(() => {
@@ -115,6 +128,12 @@ export function GameTable({
   useEffect(() => {
     setSelected([]);
   }, [game.drawCount]);
+  useEffect(() => {
+    setSelected([]);
+  }, [
+    phase.kind === "favor" ? phase.playerId : null,
+    phase.kind === "favor" ? phase.targetId : null,
+  ]);
   useEffect(() => {
     const id = snapshot.lastPlay?.id;
     if (id === previousPlay.current) return;
@@ -134,6 +153,13 @@ export function GameTable({
       : undefined;
   const currentName = snapshot.members.find(
     (member) => member.id === game.turn.playerId,
+  )?.name;
+  const bomb =
+    phase.kind === "defuse"
+      ? { playerId: phase.playerId, outcome: "defusing" as const }
+      : snapshot.lastBomb;
+  const bombName = snapshot.members.find(
+    (member) => member.id === bomb?.playerId,
   )?.name;
   const ownIndex = snapshot.members.findIndex((member) => member.id === me.id);
   const members = [
@@ -158,7 +184,7 @@ export function GameTable({
         : "")
     : lastCard
       ? "Lá bỏ mới nhất · " + CARD_NAMES[lastCard.type]
-      : "Bàn đã sẵn sàng. Đến lượt " + currentName + ".";
+      : "";
   const needsTarget =
     selected.length > 1 ||
     (selected.length === 1 &&
@@ -168,24 +194,23 @@ export function GameTable({
     <>
       <h1 className="sr-only">Bàn chơi Mèo Nổ</h1>
       <div className="table-turn" role="status">
-        <span className="eyebrow">
-          {phase.kind === "finished" ? "KẾT THÚC VÁN" : "LƯỢT HIỆN TẠI"}
-        </span>
         <strong>
           {phase.kind === "finished"
             ? "Người thắng: " +
               snapshot.members.find((member) => member.id === phase.winnerId)
                 ?.name
-            : "Lượt của " +
-              currentName +
-              " · " +
-              game.turn.remaining +
-              " lượt phải thực hiện"}
+            : phase.kind === "defuse"
+              ? bombName + " đang gỡ bom"
+              : "Lượt của " +
+                currentName +
+                (game.turn.remaining > 1
+                  ? " · " + game.turn.remaining + " lượt"
+                  : "")}
         </strong>
       </div>
       {snapshot.pause && (
         <section className="pause-banner" aria-label="Ván tạm dừng">
-          <strong>Ván tạm dừng — đang chờ kết nối lại</strong>
+          <strong>Ván tạm dừng</strong>
           <p>
             Chờ{" "}
             {snapshot.pause.missingIds
@@ -193,15 +218,57 @@ export function GameTable({
                 (id) =>
                   snapshot.members.find((member) => member.id === id)?.name,
               )
-              .join(", ")}
-            . Bài, lượt và thao tác đang chờ được giữ nguyên.
+              .join(", ")}{" "}
+            kết nối lại.
           </p>
-          {game.reaction && (
-            <p>
-              Đồng hồ Nope đã dừng. Ván tự tiếp tục khi tất cả người còn sống
-              quay lại.
-            </p>
-          )}
+        </section>
+      )}
+      {bomb && (
+        <section
+          className="bomb-warning"
+          data-outcome={bomb.outcome}
+          role="alert"
+          aria-label="Trạng thái Mèo Nổ"
+        >
+          <svg
+            className="bomb-symbol"
+            viewBox="0 0 48 48"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d={CARD_PATHS.exploding_kitten} />
+          </svg>
+          <strong>
+            {bombName +
+              (bomb.outcome === "defusing"
+                ? " rút trúng Mèo Nổ!"
+                : bomb.outcome === "exploded"
+                  ? " đã nổ và bị loại!"
+                  : " đã gỡ bom an toàn")}
+          </strong>
+        </section>
+      )}
+      {targetedAction?.targetId === me.id && (
+        <section
+          className="target-warning"
+          role="alert"
+          aria-label="Bạn đang bị nhắm tới"
+        >
+          <span className="target-warning-icon" aria-hidden="true">
+            !
+          </span>
+          <strong>
+            {requesterName}
+            {targetedAction.type === "favor"
+              ? " đang xin bạn một lá bài"
+              : " đang nhắm vào bạn bằng combo " +
+                (targetedAction.type === "pair" ? "2" : "3") +
+                " lá"}
+          </strong>
         </section>
       )}
       <section
@@ -221,6 +288,10 @@ export function GameTable({
                 (member.id === game.turn.playerId && phase.kind !== "finished"
                   ? " is-turn"
                   : "") +
+                (member.id === targetedAction?.targetId ? " is-targeted" : "") +
+                (phase.kind === "defuse" && member.id === phase.playerId
+                  ? " is-defusing"
+                  : "") +
                 (!member.connected ? " is-offline" : "") +
                 (!member.alive ? " is-eliminated" : "")
               }
@@ -229,6 +300,16 @@ export function GameTable({
                 top: positions[index][1] + "%",
               }}
             >
+              {member.id === targetedAction?.targetId && (
+                <span
+                  className="target-marker"
+                  role="img"
+                  aria-label="Đang bị nhắm tới"
+                  title="Đang bị nhắm tới"
+                >
+                  !
+                </span>
+              )}
               <span className="player-avatar" aria-hidden="true">
                 {member.name.slice(0, 1).toLocaleUpperCase("vi")}
               </span>
@@ -242,12 +323,14 @@ export function GameTable({
                   {!member.connected
                     ? "Mất kết nối"
                     : !member.alive
-                      ? "Đã bị loại"
+                      ? "Đã nổ · Bị loại"
                       : member.cardCount + " lá"}
                 </small>
                 {member.id === game.turn.playerId &&
                   phase.kind !== "finished" && (
-                    <span className="turn-tag">Đến lượt</span>
+                    <span className="turn-tag">
+                      {phase.kind === "defuse" ? "Đang gỡ bom" : "Đến lượt"}
+                    </span>
                   )}
               </div>
             </li>
@@ -270,7 +353,6 @@ export function GameTable({
                   <br />
                   Nổ
                 </span>
-                <small>ORIGINAL EDITION</small>
               </div>
               <span>
                 Chồng rút ·{" "}
@@ -299,24 +381,22 @@ export function GameTable({
                     </div>
                   ))
                 ) : (
-                  <div className="empty-discard">
-                    Bài bỏ
-                    <br />
-                    <small>Chưa có lá nào</small>
-                  </div>
+                  <div className="empty-discard">Trống</div>
                 )}
               </div>
               <span>Bài bỏ · {game.discardPile.length} lá</span>
             </div>
           </div>
-          <p
-            className="play-announcement"
-            role="status"
-            aria-live="polite"
-            data-testid="last-play"
-          >
-            {announcement}
-          </p>
+          {announcement && (
+            <p
+              className="play-announcement"
+              role="status"
+              aria-live="polite"
+              data-testid="last-play"
+            >
+              {announcement}
+            </p>
+          )}
         </div>
       </section>
       {game.reaction && (
@@ -357,10 +437,7 @@ export function GameTable({
                   " Nope"}
             </p>
             {lastReactionPlayerId === me.id && (
-              <p>
-                Bạn không thể Nope lá mình vừa đánh. Có thể phản Nope của người
-                khác.
-              </p>
+              <p>Không thể Nope bài vừa đánh.</p>
             )}
           </div>
           <div className="actions">
@@ -423,8 +500,8 @@ export function GameTable({
               type="number"
               min={0}
               max={game.drawCount}
-              value={position}
-              disabled={locked}
+              value={position === "random" ? "" : position}
+              disabled={locked || position === "random"}
               onChange={(event) => setPosition(Number(event.target.value))}
             />
             <button
@@ -442,11 +519,27 @@ export function GameTable({
               Dưới cùng
             </button>
             <button
-              className="secondary"
+              className="secondary outline-button"
+              aria-pressed={position === "random"}
               disabled={locked}
+              onClick={() => setPosition("random")}
+            >
+              Ngẫu nhiên
+            </button>
+            <button
+              className="secondary"
+              disabled={
+                locked ||
+                (position !== "random" &&
+                  (!Number.isInteger(position) ||
+                    position < 0 ||
+                    position > game.drawCount))
+              }
               onClick={() => send({ type: "insert_bomb", position })}
             >
-              Cài kín vị trí này
+              {position === "random"
+                ? "Cài bom ngẫu nhiên"
+                : "Cài kín vị trí này"}
             </button>
           </div>
         </section>
@@ -454,22 +547,14 @@ export function GameTable({
       <section className="hand-panel table-hand" aria-label="Tay bài của bạn">
         <div className="panel-heading">
           <h2>Tay bài của bạn</h2>
-          <span>{game.hand.length} lá · chỉ bạn thấy</span>
+          <span>{game.hand.length} lá</span>
         </div>
-        {!me.alive && (
-          <p className="connection-note">
-            Bạn đã bị loại. Vẫn có thể xem bàn công khai.
-          </p>
-        )}
+        {!me.alive && <p className="connection-note">Bạn đã bị loại.</p>}
         {phase.kind === "finished" && (
           <p className="connection-note">
-            Chủ phòng có thể về phòng chờ để tổ chức ván mới. Cả nhóm giữ ghế và
-            cần sẵn sàng lại.
-          </p>
-        )}
-        {phase.kind === "favor" && phase.targetId === me.id && (
-          <p className="choice-note">
-            Chọn một lá bên dưới để cho người xin bài.
+            {snapshot.hostId === me.id
+              ? "Chơi lại từ menu Phòng."
+              : "Chờ chủ phòng mở ván mới."}
           </p>
         )}
         <div className="hand">
@@ -490,16 +575,12 @@ export function GameTable({
                 CARD_NAMES[card.type]
               }
               aria-pressed={selected.includes(card.id)}
-              disabled={
-                locked ||
-                !(
-                  myTurn ||
-                  (phase.kind === "favor" && phase.targetId === me.id)
-                )
-              }
+              disabled={locked || !(myTurn || giving)}
               onClick={() =>
-                phase.kind === "favor"
-                  ? send({ type: "give", cardId: card.id })
+                giving
+                  ? setSelected((current) =>
+                      current.includes(card.id) ? [] : [card.id],
+                    )
                   : setSelected((current) =>
                       current.includes(card.id)
                         ? current.filter((id) => id !== card.id)
@@ -513,10 +594,51 @@ export function GameTable({
             </button>
           ))}
         </div>
-        {selectedCard && (
+        {selectedCard && myTurn && (
           <p className="card-help">
             {CARD_NAMES[selectedCard.type]} — {CARD_COPY[selectedCard.type]}
           </p>
+        )}
+        {giving && (
+          <section className="favor-confirmation" aria-label="Xác nhận cho bài">
+            <p>
+              {selectedCard ? (
+                <>
+                  Bạn muốn đưa <strong>{CARD_NAMES[selectedCard.type]}</strong>{" "}
+                  cho <strong>{requesterName}</strong>?
+                </>
+              ) : (
+                "Chọn một lá để đưa cho " + requesterName + "."
+              )}
+            </p>
+            <div className="actions">
+              <button
+                className="secondary outline-button"
+                disabled={locked || !selectedCard}
+                onClick={() => setSelected([])}
+              >
+                Hủy chọn
+              </button>
+              <button
+                className="secondary"
+                disabled={locked || selected.length !== 1 || !selectedCard}
+                aria-label={
+                  selectedCard
+                    ? "Xác nhận đưa " +
+                      CARD_NAMES[selectedCard.type] +
+                      " cho " +
+                      requesterName
+                    : "Xác nhận cho bài"
+                }
+                onClick={() => {
+                  if (selectedCard)
+                    send({ type: "give", cardId: selectedCard.id });
+                }}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </section>
         )}
         {myTurn && needsTarget && (
           <div className="target-controls">
@@ -558,23 +680,10 @@ export function GameTable({
           </div>
         )}
         <div className="hand-actions">
-          <p className="connection-note">
-            {snapshot.pause
-              ? "Đang chờ người chơi quay lại."
-              : phase.kind === "reaction"
-                ? "Hãy chọn Nope hoặc Bỏ qua phía trên."
-                : myTurn
-                  ? "Chọn bài để đánh, hoặc rút để hoàn thành một lượt."
-                  : phase.kind === "favor"
-                    ? "Đang chờ người được xin chọn bài."
-                    : phase.kind === "finished"
-                      ? "Ván đã kết thúc."
-                      : "Đang chờ " + currentName + "."}
-          </p>
           <div className="actions">
             {myTurn && (
               <button
-                className="secondary outline-button"
+                className="increment"
                 disabled={
                   locked || !selected.length || (needsTarget && !targetId)
                 }

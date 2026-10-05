@@ -313,7 +313,7 @@ function App() {
       <main className="game-page">
         <header className="game-header">
           <a className="brand" href="/">
-            Mèo Nổ<span> / Original Edition</span>
+            Mèo Nổ
           </a>
           <span
             className={"status " + connection}
@@ -325,9 +325,6 @@ function App() {
           <details className="room-menu">
             <summary aria-label="Tùy chọn phòng">Phòng</summary>
             <div className="room-menu-panel">
-              <p className="eyebrow">
-                {snapshot.capacity} NGƯỜI · CÙNG MỘT BÀN
-              </p>
               <label htmlFor="game-link">Link cùng phòng</label>
               <input
                 id="game-link"
@@ -394,26 +391,12 @@ function App() {
     <main className="lab">
       <header className="masthead">
         <a className="brand" href="/">
-          Mèo Nổ<span> / bàn chơi cùng bạn</span>
+          Mèo Nổ
         </a>
-        <span className="phase">ORIGINAL EDITION</span>
+        <span className="phase">VÁN DÀI · +24 LÁ</span>
       </header>
       <section className="intro">
-        <p className="eyebrow">
-          ORIGINAL EDITION · 3–5 NGƯỜI · KHÔNG TÀI KHOẢN
-        </p>
-        <h1>
-          {session
-            ? "Đủ bạn. Sẵn sàng."
-            : room
-              ? "Bạn có lời mời."
-              : "Một bàn. Cả nhóm."}
-        </h1>
-        <p>
-          {session
-            ? "Server giữ luật và bài kín. Bạn chỉ thấy tay bài của mình."
-            : "Chọn tên, gửi link cho bạn bè và cùng vào một phòng."}
-        </p>
+        <h1>{session ? "Phòng chờ" : room ? "Vào phòng" : "Tạo phòng"}</h1>
       </section>
       {!validRoom && (
         <p className="error" role="alert">
@@ -436,7 +419,7 @@ function App() {
               maxLength={32}
               required
               autoComplete="nickname"
-              placeholder="Bạn muốn được gọi là gì?"
+              placeholder="VD: Thảo"
             />
             {!room && (
               <>
@@ -456,16 +439,14 @@ function App() {
                 </select>
               </>
             )}
-            {room && (
+            {room && !error && (
               <p>
                 {snapshot
                   ? snapshot.members.length +
                     "/" +
                     snapshot.capacity +
                     " người trong phòng"
-                  : error
-                    ? "Không thể mở phòng từ lời mời này."
-                    : "Đang kiểm tra lời mời…"}
+                  : "Đang kiểm tra lời mời…"}
               </p>
             )}
             <button
@@ -481,10 +462,6 @@ function App() {
             >
               {busy ? "Đang xử lý…" : room ? "Vào phòng" : "Tạo phòng"}
             </button>
-            <p className="connection-note">
-              Phiên được lưu riêng trên trình duyệt này. Tên trùng không lấy
-              được ghế của người khác.
-            </p>
             {room && (
               <a className="text-button" href="/">
                 Tạo một phòng mới
@@ -497,7 +474,6 @@ function App() {
           <section className="counter-panel" aria-label="Phòng chờ">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">PHÒNG CHỜ</p>
                 <h2>
                   {snapshot?.members.length ?? 1} /{" "}
                   {snapshot?.capacity ?? capacity} người
@@ -563,15 +539,12 @@ function App() {
                   Bắt đầu ván
                 </button>
               )}
-              <p className="connection-note">
-                {canStart
-                  ? "Đủ người sẵn sàng. Chủ phòng có thể bắt đầu."
-                  : "Cần đủ số người đã chọn, tất cả online và sẵn sàng."}
-              </p>
+              {!canStart && (
+                <p className="connection-note">Chờ đủ người sẵn sàng.</p>
+              )}
             </div>
           </section>
           <aside className="controls">
-            <p className="eyebrow">MỜI NHÓM BẠN</p>
             <div className="invite">
               <label htmlFor="room-link">Link cùng phòng</label>
               <input
@@ -630,22 +603,9 @@ function App() {
                 Rời phòng
               </button>
             )}
-            <div className="restart-note">
-              <span className="step">SẴN SÀNG NGỒI VÀO BÀN</span>
-              <p>
-                Khi bắt đầu, cả nhóm tự chuyển sang bàn chơi. Giữ dữ liệu trình
-                duyệt để lấy lại ghế nếu mất kết nối. Bản local, chưa phát hành
-                công khai.
-              </p>
-            </div>
           </aside>
         </div>
       )}
-      <footer>
-        <span>Luật Original Edition 2022</span>
-        <span>Bài kín phía server</span>
-        <span>Chạy local · chưa deploy</span>
-      </footer>
     </main>
   );
 }

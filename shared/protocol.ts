@@ -17,6 +17,7 @@ type GameAction = GameCommand extends infer Command
   : never;
 export type RoomAction =
   | GameAction
+  | { type: "insert_bomb"; position: "random" }
   | { type: "ready"; ready: boolean }
   | { type: "set_capacity"; capacity: Capacity }
   | { type: "start" }
@@ -53,6 +54,11 @@ export type RoomSnapshot = {
     playerId: string;
     targetId?: string;
     cards: Card[];
+  };
+  lastBomb?: null | {
+    id: number;
+    playerId: string;
+    outcome: "defusing" | "defused" | "exploded";
   };
   pause: null | {
     since: number;

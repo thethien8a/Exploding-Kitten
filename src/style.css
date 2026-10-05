@@ -53,11 +53,6 @@ a:focus-visible {
   color: inherit;
   text-decoration: none;
 }
-.brand span {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--muted);
-}
 .phase {
   font-family: Consolas, monospace;
   font-size: 12px;
@@ -68,13 +63,6 @@ a:focus-visible {
 }
 .intro {
   padding: 36px 0 28px;
-}
-.eyebrow {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  margin: 0;
-  color: var(--muted);
 }
 h1 {
   font-family: Georgia, "Times New Roman", serif;
@@ -92,12 +80,6 @@ h2 {
 }
 p {
   line-height: 1.6;
-}
-.intro > p:last-child {
-  color: var(--muted);
-  max-width: 520px;
-  font-size: 15px;
-  margin: 0;
 }
 .entry-panel {
   max-width: 520px;
@@ -216,21 +198,6 @@ small {
   font-size: 12px;
   display: inline-block;
 }
-.restart-note {
-  margin-top: 24px;
-  border-top: 1px dashed var(--line);
-  padding-top: 18px;
-}
-.step {
-  font-family: Consolas, monospace;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-}
-.restart-note p {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 10px 0 0;
-}
 .error {
   border-left: 3px solid #c95024;
   padding: 12px 16px;
@@ -336,15 +303,6 @@ details {
 summary {
   cursor: pointer;
 }
-footer {
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  padding-top: 20px;
-  color: var(--muted);
-  font-size: 11px;
-}
 @media (max-width: 680px) {
   .lab {
     padding: 22px 20px;
@@ -352,15 +310,8 @@ footer {
   .brand {
     font-size: 19px;
   }
-  .brand span {
-    display: none;
-  }
   .intro {
     padding: 28px 0;
-  }
-  .intro .eyebrow {
-    font-size: 9px;
-    line-height: 1.6;
   }
   .workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -376,9 +327,6 @@ footer {
     padding: 22px;
   }
   .members li {
-    gap: 10px;
-  }
-  footer {
     gap: 10px;
   }
 }
@@ -544,9 +492,35 @@ summary:focus-visible {
   font-family: Georgia, serif;
   font-size: 23px;
 }
-.is-turn {
+.is-turn,
+.is-targeted {
   border-color: #c95024;
   box-shadow: 0 0 0 2px #c9502420;
+}
+.is-defusing {
+  border-color: #c95024;
+  background: #f9e7dc;
+  box-shadow: 0 0 0 3px #c9502420;
+}
+.target-marker,
+.target-warning-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border: 2px solid #fffdf7;
+  border-radius: 50%;
+  background: #c95024;
+  color: #fffdf7;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+.target-marker {
+  position: absolute;
+  top: -9px;
+  right: -8px;
 }
 .turn-tag {
   display: inline-block;
@@ -621,12 +595,6 @@ summary:focus-visible {
   font-size: 30px;
   line-height: 1.1;
 }
-.deck-back small {
-  font-size: 6px;
-  color: #dfdebd;
-  letter-spacing: 0.12em;
-  margin-top: 16px;
-}
 .discard-stack {
   position: relative;
   width: 112px;
@@ -662,10 +630,6 @@ summary:focus-visible {
   font-size: 15px;
   line-height: 1.2;
 }
-.table-card .eyebrow {
-  font-size: 8px;
-  letter-spacing: 0.07em;
-}
 .card-symbol {
   width: 44px;
   height: 44px;
@@ -677,9 +641,6 @@ summary:focus-visible {
   border-style: dashed;
   color: var(--muted);
   font-size: 14px;
-}
-.empty-discard small {
-  font-size: 10px;
 }
 .play-announcement {
   font-size: 13px;
@@ -736,6 +697,37 @@ summary:focus-visible {
 .pause-banner p {
   margin: 6px 0 0;
   font-size: 13px;
+}
+.target-warning,
+.bomb-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  margin: 0 0 12px;
+  border: 1px solid #e1bba3;
+  border-left: 4px solid #c95024;
+  border-radius: 8px;
+  background: #f9e7dc;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.bomb-symbol {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: #ab3e1c;
+}
+.bomb-warning[data-outcome="exploded"] {
+  border-color: #c85140;
+  background: #fbe3df;
+}
+.bomb-warning[data-outcome="defused"] {
+  border-color: #6c8c72;
+  background: #e8eddf;
+}
+.bomb-warning[data-outcome="defused"] .bomb-symbol {
+  color: #31583c;
 }
 .return-seat {
   margin-top: 8px;
@@ -798,6 +790,11 @@ summary:focus-visible {
 .bomb-controls input {
   width: 90px;
 }
+.bomb-controls [aria-pressed="true"] {
+  border-color: #183b2f;
+  background: #e8eddf;
+  box-shadow: inset 0 0 0 1px #183b2f;
+}
 .game-page .hand-panel {
   padding: 18px 22px 14px;
   border: 1px solid var(--line);
@@ -833,10 +830,6 @@ summary:focus-visible {
   font-size: 17px;
   line-height: 1.2;
 }
-.table-hand .card .eyebrow {
-  font-size: 8px;
-  letter-spacing: 0.08em;
-}
 .table-hand .card:disabled {
   opacity: 1;
 }
@@ -851,12 +844,9 @@ summary:focus-visible {
 }
 .hand-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 16px;
-}
-.hand-actions .connection-note {
-  margin: 0;
 }
 .hand-actions .actions {
   flex-shrink: 0;
@@ -866,11 +856,32 @@ summary:focus-visible {
   font-size: 13px;
   border-radius: 3px;
 }
-.card-help,
-.choice-note {
+.card-help {
   margin: 0 0 12px;
   font-size: 13px;
   color: #6b4328;
+}
+.favor-confirmation {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #d9c29a;
+  border-radius: 6px;
+  background: #faf0de;
+}
+.favor-confirmation p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.favor-confirmation .actions {
+  justify-content: flex-end;
+}
+.favor-confirmation .secondary {
+  margin: 0;
+  max-width: 100%;
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .target-controls {
   display: grid;
@@ -918,9 +929,6 @@ summary:focus-visible {
     padding: 12px 8px;
     gap: 4px;
     flex-direction: column;
-  }
-  .table-turn .eyebrow {
-    font-size: 9px;
   }
   .table-turn strong {
     font-size: 16px;
@@ -988,19 +996,12 @@ summary:focus-visible {
   .deck-back > span {
     font-size: 24px;
   }
-  .deck-back small {
-    font-size: 5px;
-    margin-top: 9px;
-  }
   .table-card {
     padding: 8px;
     gap: 5px;
   }
   .table-card strong {
     font-size: 13px;
-  }
-  .table-card .eyebrow {
-    font-size: 6px;
   }
   .table-card .card-symbol {
     width: 31px;
@@ -1047,16 +1048,8 @@ summary:focus-visible {
     gap: 10px;
     align-items: stretch;
   }
-  .hand-actions .connection-note {
-    font-size: 11px;
-  }
   .hand-actions .actions {
     flex-wrap: nowrap;
-  }
-  .hand-actions .secondary {
-    flex: 1;
-    padding: 10px 8px;
-    font-size: 12px;
   }
   .hand-actions .increment {
     flex: 1;
@@ -1077,12 +1070,20 @@ summary:focus-visible {
     font-size: 14px;
   }
   .pause-banner,
-  .private-choice {
+  .private-choice,
+  .target-warning,
+  .bomb-warning {
     padding: 12px;
     font-size: 13px;
   }
   .pause-banner p {
     font-size: 12px;
+  }
+  .favor-confirmation .actions {
+    flex-direction: column-reverse;
+  }
+  .favor-confirmation .secondary {
+    width: 100%;
   }
   .future-cards {
     gap: 8px;

@@ -12,6 +12,7 @@ import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Room, type RoomState } from "../worker/room";
 import {
+  CARD_NAMES,
   ROOM_TTL_MS,
   CONNECTION_TIMEOUT_MS,
   type ClientCommand,
@@ -385,6 +386,27 @@ for (const drawsBomb of [false, true]) {
         expect((await view(actor)).game!.turn.remaining).toBe(
           drawsBomb ? 3 : 2,
         );
+        for (const page of pages) {
+          const banner = page.getByRole("alert", { name: "Trạng thái Mèo Nổ" });
+          if (drawsBomb) {
+            await expect(banner).toContainText("Thảo rút trúng Mèo Nổ!");
+            await expect(
+              page.locator('[data-player-id="' + sessions[0].playerId + '"]'),
+            ).toContainText("Đang gỡ bom");
+            expect((await view(page)).lastBomb?.outcome).toBe("defusing");
+          } else await expect(banner).toHaveCount(0);
+        }
+        if (drawsBomb) {
+          for (const page of [pages[1], pages[2]])
+            await expect(
+              page.getByRole("region", { name: "Cài bom kín" }),
+            ).toHaveCount(0);
+          await pages[1].screenshot({
+            path: testInfo.outputPath("bomb-defusing-observer-mobile.png"),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
         await expect(
           actor.locator('.hand .card[aria-pressed="true"]'),
         ).toHaveCount(0);
@@ -413,6 +435,116 @@ for (const drawsBomb of [false, true]) {
   );
 }
 
+for (const finishes of [false, true]) {
+  test(
+    "Mèo Nổ công khai khi bị loại" + (finishes ? " và kết thúc ván" : ""),
+    async ({ browser, request }, testInfo) => {
+      const { sessions, saved } = await prepare(request, "turn");
+      const game = saved.game!;
+      const actor = game.players[0];
+      game.discardPile.push(
+        ...actor.hand.filter((card) => card.type === "defuse"),
+      );
+      actor.hand = actor.hand.filter((card) => card.type !== "defuse");
+      const bombIndex = game.drawPile.findIndex(
+        (card) => card.type === "exploding_kitten",
+      );
+      [game.drawPile[0], game.drawPile[bombIndex]] = [
+        game.drawPile[bombIndex],
+        game.drawPile[0],
+      ];
+      const bombId = game.drawPile[0].id;
+      if (finishes) {
+        game.players[2].alive = false;
+        game.discardPile.push(...game.players[2].hand.splice(0));
+        const otherBomb = game.drawPile.findIndex(
+          (card, index) => index > 0 && card.type === "exploding_kitten",
+        );
+        game.discardPile.push(...game.drawPile.splice(otherBomb, 1));
+      }
+      await writeStored(saved);
+      await start();
+      const { contexts, pages } = await group(browser, sessions);
+      try {
+        await resumed(pages);
+        await pages[0]
+          .getByRole("button", { name: "Rút bài", exact: true })
+          .click();
+        const drawCommand = await pages[0].evaluate(() =>
+          (window as unknown as TestWindow).wire.commands.at(-1)!,
+        );
+        for (const page of pages) {
+          await expect(
+            page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+          ).toContainText("Thảo đã nổ và bị loại!");
+          await expect(
+            page.locator('[data-player-id="' + sessions[0].playerId + '"]'),
+          ).toContainText("Đã nổ · Bị loại");
+          await expect(
+            page.getByRole("region", { name: "Cài bom kín" }),
+          ).toHaveCount(0);
+          const snapshot = await view(page);
+          expect(snapshot.lastBomb).toEqual({
+            id: drawCommand.version + 1,
+            playerId: sessions[0].playerId,
+            outcome: "exploded",
+          });
+          expect(snapshot.game!.phase.kind).toBe(
+            finishes ? "finished" : "turn",
+          );
+          expect(JSON.stringify(snapshot)).not.toContain('"' + bombId + '"');
+        }
+        expect((await view(pages[0])).game!.hand).toEqual([]);
+        await expect(
+          pages[0].getByRole("button", { name: "Rút bài", exact: true }),
+        ).toBeDisabled();
+        if (finishes)
+          await expect(pages[1].locator(".table-turn")).toContainText(
+            "Người thắng: Minh",
+          );
+        const before = await view(pages[0]);
+        const publicView = (await (
+          await request.get("/api/rooms/" + saved.roomId)
+        ).json()) as RoomSnapshot;
+        expect(publicView.lastBomb).toEqual(before.lastBomb);
+        expect(JSON.stringify(publicView)).not.toContain('"' + bombId + '"');
+        await stop();
+        expect((await readStored(saved.roomId)).lastBomb).toEqual(
+          before.lastBomb,
+        );
+        await start();
+        await resumed(pages, before.version + 1);
+        for (const page of pages) {
+          expect((await view(page)).lastBomb).toEqual(before.lastBomb);
+          await expect(
+            page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+          ).toContainText("Thảo đã nổ và bị loại!");
+        }
+        await pages[0].screenshot({
+          path: testInfo.outputPath("bomb-exploded-desktop.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        for (const width of [390, 320]) {
+          await pages[1].setViewportSize({ width, height: 844 });
+          expect(
+            await pages[1].evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          ).toBe(true);
+          await pages[1].screenshot({
+            path: testInfo.outputPath("bomb-exploded-mobile-" + width + ".png"),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      } finally {
+        await Promise.all(contexts.map((context) => context.close()));
+      }
+    },
+  );
+}
+
 for (const phase of ["turn", "favor", "future", "defuse"] as const) {
   test(
     "restart runtime giữ " + phase + ", bài riêng và lượt nợ",
@@ -428,12 +560,40 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
         );
         expect(before[0].game!.turn.remaining).toBe(3);
         expect(before[0].game!.phase.kind).toBe(phase);
+        if (phase === "favor") {
+          await expect(
+            pages[1].getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
+          ).toContainText("Thảo đang xin bạn một lá bài");
+          for (const page of [pages[0], pages[2]])
+            await expect(
+              page.getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
+            ).toHaveCount(0);
+          await pages[1].locator(".hand .card").nth(1).click();
+          expect(
+            await pages[1].evaluate(
+              () => (window as unknown as TestWindow).wire.commands,
+            ),
+          ).toEqual([]);
+          expect((await view(pages[1])).game!.hand).toEqual(
+            before[1].game!.hand,
+          );
+        }
+        if (phase === "defuse") {
+          await pages[0]
+            .getByRole("button", { name: "Ngẫu nhiên", exact: true })
+            .click();
+          for (const page of pages)
+            await expect(
+              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+            ).toContainText("Thảo rút trúng Mèo Nổ!");
+        }
         await stop();
         const durable = await readStored(saved.roomId);
         expect(durable.schemaVersion).toBe(1);
         expect(durable.gameId).toBe(saved.gameId);
         expect(durable.game).toEqual(saved.game);
         expect(durable.lastPlay).toEqual(saved.lastPlay);
+        expect(durable.lastBomb).toEqual(saved.lastBomb);
         await start();
         await resumed(pages, before[0].version + 1);
         for (const [index, page] of pages.entries()) {
@@ -441,6 +601,7 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           expect(after.gameId).toBe(saved.gameId);
           expect(after.game).toEqual(before[index].game);
           expect(after.lastPlay).toEqual(before[index].lastPlay);
+          expect(after.lastBomb).toEqual(before[index].lastBomb);
           if (phase === "favor")
             await expect(page.getByTestId("last-play")).toHaveText(
               "Thảo vừa đánh Xin Bài nhắm vào Minh",
@@ -453,17 +614,58 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
             /tokenHash|drawPile|removedCards|receipts|connectionId|bomb-/,
           );
         }
+        if (phase === "defuse") {
+          await expect(
+            pages[0].getByRole("button", { name: "Ngẫu nhiên", exact: true }),
+          ).toHaveAttribute("aria-pressed", "true");
+          for (const page of pages)
+            await expect(
+              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+            ).toContainText("Thảo rút trúng Mèo Nổ!");
+          for (const page of [pages[1], pages[2]])
+            await expect(
+              page.getByRole("region", { name: "Cài bom kín" }),
+            ).toHaveCount(0);
+          for (const width of [1280, 390, 320]) {
+            await pages[0].setViewportSize({ width, height: 900 });
+            expect(
+              await pages[0].evaluate(
+                () => document.documentElement.scrollWidth <= innerWidth,
+              ),
+            ).toBe(true);
+            await pages[0].screenshot({
+              path: testInfo.outputPath("bomb-random-" + width + ".png"),
+              fullPage: true,
+              animations: "disabled",
+            });
+          }
+        }
         if (phase === "future" || phase === "defuse")
           await pages[0].screenshot({
             path: testInfo.outputPath("phase-3-restored-" + phase + ".png"),
             fullPage: true,
           });
-        if (phase === "favor")
+        if (phase === "favor") {
+          await expect(
+            pages[1].locator('.hand .card[aria-pressed="true"]'),
+          ).toHaveCount(1);
+          await expect(pages[1].locator(".hand .card").nth(1)).toHaveAttribute(
+            "aria-pressed",
+            "true",
+          );
           await pages[1].screenshot({
             path: testInfo.outputPath("target-favor-mobile.png"),
             fullPage: true,
             animations: "disabled",
           });
+          await pages[1].setViewportSize({ width: 1280, height: 900 });
+          await pages[1].screenshot({
+            path: testInfo.outputPath("favor-confirmation-desktop.png"),
+            fullPage: true,
+            animations: "disabled",
+          });
+          await pages[1].setViewportSize({ width: 390, height: 844 });
+        }
         if (phase === "turn") {
           expect((await command(pages[0], { type: "draw" })).ok).toBe(true);
           await expect
@@ -482,28 +684,112 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
             .poll(async () => (await view(pages[0])).game!.futureCards.length)
             .toBe(0);
         } else if (phase === "favor") {
-          const given = saved.game!.players[1].hand[0];
-          expect(
-            (await command(pages[1], { type: "give", cardId: given.id })).ok,
-          ).toBe(true);
+          const given = saved.game!.players[1].hand[1];
+          const confirm = pages[1].getByRole("button", {
+            name: /^Xác nhận đưa/,
+          });
+          await expect(confirm).toHaveText("Xác nhận");
+          await expect(confirm).toHaveAccessibleName(
+            "Xác nhận đưa " + CARD_NAMES[given.type] + " cho Thảo",
+          );
+          await expect(
+            pages[1].getByRole("region", { name: "Xác nhận cho bài" }),
+          ).toContainText(
+            "Bạn muốn đưa " + CARD_NAMES[given.type] + " cho Thảo?",
+          );
+          await confirm.click();
           await expect
             .poll(async () => (await view(pages[0])).game!.hand.at(-1)?.id)
             .toBe(given.id);
+          expect((await view(pages[0])).game!.hand).toHaveLength(
+            before[0].game!.hand.length + 1,
+          );
+          await expect
+            .poll(async () => (await view(pages[1])).game!.hand.length)
+            .toBe(before[1].game!.hand.length - 1);
+          const sent = await pages[1].evaluate(
+            () => (window as unknown as TestWindow).wire.commands,
+          );
+          expect(sent).toHaveLength(1);
+          expect(sent[0].action).toEqual({ type: "give", cardId: given.id });
+          for (const page of pages) {
+            await expect(
+              page.getByRole("img", { name: "Đang bị nhắm tới" }),
+            ).toHaveCount(0);
+            await expect(
+              page.getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
+            ).toHaveCount(0);
+            await expect(page.getByTestId("last-play")).toHaveText(
+              "Thảo vừa đánh Xin Bài nhắm vào Minh",
+            );
+          }
+          await expect(
+            pages[1].getByRole("region", { name: "Xác nhận cho bài" }),
+          ).toHaveCount(0);
+          await expect(
+            pages[1].locator('.hand .card[aria-pressed="true"]'),
+          ).toHaveCount(0);
           expect(JSON.stringify(await view(pages[2]))).not.toContain(
             '"' + given.id + '"',
           );
         } else {
-          expect(
-            (await command(pages[0], { type: "insert_bomb", position: 3 })).ok,
-          ).toBe(true);
+          await pages[0]
+            .getByRole("button", { name: "Cài bom ngẫu nhiên", exact: true })
+            .click();
           await expect
             .poll(async () => (await view(pages[0])).game!.turn.remaining)
             .toBe(2);
+          const sent = await pages[0].evaluate(
+            () => (window as unknown as TestWindow).wire.commands,
+          );
+          expect(sent).toHaveLength(1);
+          expect(sent[0].action).toEqual({
+            type: "insert_bomb",
+            position: "random",
+          });
+          for (const page of pages) {
+            await expect(
+              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+            ).toContainText("Thảo đã gỡ bom an toàn");
+            const snapshot = await view(page);
+            expect(snapshot.lastBomb?.outcome).toBe("defused");
+            if (saved.game!.phase.kind === "defuse")
+              expect(JSON.stringify(snapshot)).not.toContain(
+                '"' + saved.game!.phase.bomb.id + '"',
+              );
+            expect(snapshot.lastBomb).not.toHaveProperty("position");
+          }
+          await pages[1].screenshot({
+            path: testInfo.outputPath("bomb-defused-observer-mobile.png"),
+            fullPage: true,
+            animations: "disabled",
+          });
           await stop();
           const inserted = await readStored(saved.roomId);
           expect(saved.game!.phase.kind).toBe("defuse");
-          if (saved.game!.phase.kind === "defuse")
-            expect(inserted.game!.drawPile[3]).toEqual(saved.game!.phase.bomb);
+          if (saved.game!.phase.kind === "defuse") {
+            const bomb = saved.game!.phase.bomb;
+            expect(
+              inserted.game!.drawPile.filter((card) => card.id === bomb.id),
+            ).toEqual([bomb]);
+            expect(
+              inserted.game!.drawPile.filter((card) => card.id !== bomb.id),
+            ).toEqual(saved.game!.drawPile);
+          }
+          await start();
+          await resumed(pages);
+          expect(
+            (
+              await command(pages[0], sent[0].action, {
+                id: sent[0].id,
+                version: sent[0].version,
+              })
+            ).ok,
+          ).toBe(true);
+          await stop();
+          const replayed = await readStored(saved.roomId);
+          expect(replayed.game).toEqual(inserted.game);
+          expect(replayed.lastBomb).toEqual(inserted.lastBomb);
         }
         await writeFile(
           testInfo.outputPath("recovery-evidence.json"),
@@ -966,6 +1252,23 @@ for (const count of [2, 3]) {
             targetId: sessions[1].playerId,
             cards: combo,
           });
+          await expect(
+            page.getByRole("img", { name: "Đang bị nhắm tới" }),
+          ).toHaveCount(1);
+          await expect(
+            page.locator(".player-seat.is-targeted"),
+          ).toHaveAttribute("data-player-id", sessions[1].playerId);
+          const warning = page.getByRole("alert", {
+            name: "Bạn đang bị nhắm tới",
+          });
+          if (page === pages[1])
+            await expect(warning).toContainText(
+              "Thảo đang nhắm vào bạn bằng combo " + count + " lá",
+            );
+          else await expect(warning).toHaveCount(0);
+          await expect(
+            page.getByRole("region", { name: "Xác nhận cho bài" }),
+          ).toHaveCount(0);
         }
         await pages[0].screenshot({
           path: testInfo.outputPath("table-combo-desktop.png"),
@@ -992,6 +1295,12 @@ for (const count of [2, 3]) {
             cards: [nope],
           });
           expect((await view(page)).lastPlay).not.toHaveProperty("targetId");
+          await expect(
+            page.getByRole("img", { name: "Đang bị nhắm tới" }),
+          ).toHaveCount(0);
+          await expect(
+            page.getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
+          ).toHaveCount(0);
         }
         await pages[1].screenshot({
           path: testInfo.outputPath("table-nope-mobile.png"),
@@ -1057,9 +1366,7 @@ test("không tự Nope nhưng được phản Nope của người khác, kể c�
     await expect(ownButton).toBeDisabled();
     await expect(otherButton).toBeEnabled();
     await expect(
-      pages[0].getByText(
-        "Bạn không thể Nope lá mình vừa đánh. Có thể phản Nope của người khác.",
-      ),
+      pages[0].getByText("Không thể Nope bài vừa đánh."),
     ).toBeVisible();
     const before = await view(pages[0]);
     expect(
@@ -1233,7 +1540,7 @@ test("chủ rời giữ ghế và chuyển quyền, hủy/tái đấu rồi chơ
     expect((await command(pages[1], { type: "start" })).ok).toBe(true);
     await expect
       .poll(async () => (await view(pages[1])).game!.drawCount)
-      .toBe(23);
+      .toBe(47);
     expect((await view(pages[1])).gameId).not.toBe(nextId);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
@@ -1268,8 +1575,12 @@ test("phòng hết hạn xóa cả snapshot/journal, phiên cũ có thông báo 
     );
     await page.goto("/?room=" + saved.roomId);
     await expect(page.getByRole("alert")).toContainText("hết hạn");
+    await expect(page.getByRole("alert")).toHaveCount(1);
     await expect(
       page.getByText("Không thể mở phòng từ lời mời này.", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Tạo một phòng mới", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Đang kiểm tra lời mời…", { exact: true }),

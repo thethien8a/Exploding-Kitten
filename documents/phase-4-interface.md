@@ -8,6 +8,12 @@ Người dùng chọn **B — Vòng bạn bè**: sau khi bắt đầu, cả nhó
 
 Menu Phòng chứa link mời, rời ván và hủy/về lobby. Giữ các lựa chọn riêng, pause/recovery và luật Phase 2–3; bổ sung nút cài bom đầu/cuối. Render và thao tác đã kiểm tra bằng Chrome desktop và viewport 390/320px, gồm cuộn tay bài, tên dài, combo/Nope và các trạng thái riêng.
 
+### Bổ sung theo yêu cầu — 05/10/2026
+
+Cả bàn thấy tên người rút trúng Mèo Nổ và trạng thái đang gỡ, đã gỡ an toàn hoặc đã nổ/bị loại; ghế đang gỡ được làm nổi bật. Người gỡ có thêm lựa chọn **Ngẫu nhiên**, chỉ cài sau khi xác nhận, server chọn kín vị trí; khóa thao tác khi chờ ACK/pause/mất kết nối. Giữ lựa chọn đầu/cuối và nhập vị trí số. Ván mới dùng biến thể chồng rút thêm 24 lá thường, vẫn chia 8 lá/người và giữ số bom; ván đã lưu không đổi. Chi tiết bộ bài trong [README](../README.md).
+
+Đã rút gọn chữ ở trang tạo/vào phòng, phòng chờ và bàn chơi: bỏ chú thích kỹ thuật, nhãn loại bài và hướng dẫn lặp. Giữ lượt/nợ, tên người bị nhắm hoặc dính bom, trạng thái kết nối/pause, lỗi, countdown Nope và xác nhận lá/người nhận. Tác dụng bài chỉ hiện khi chọn bài để đánh; nút cho bài ghi ngắn **Xác nhận**, câu hỏi vẫn nêu đầy đủ lá và người nhận, tên truy cập của nút vẫn đầy đủ.
+
 Đây là **phần bàn chơi được yêu cầu, không phải hoàn thành toàn bộ Phase 4**. Nghiệm thu thao tác trọn ván trên điện thoại/Safari thật và đánh giá sử dụng với người chơi vẫn còn cần làm. Kết quả, ảnh và giới hạn trong [PROGRESS.md](PROGRESS.md).
 
 ## Màn hình và trạng thái
@@ -18,8 +24,9 @@ Menu Phòng chứa link mời, rời ván và hủy/về lobby. Giữ các lựa
 | Phòng chờ | Người chơi, chủ phòng, kết nối, sẵn sàng, sao chép link, bắt đầu, mời ra trước ván |
 | Bàn chơi | Người đến lượt, lượt còn nợ, chồng rút/bỏ, người chơi và số bài, tay bài riêng, diễn biến công khai |
 | Chọn bài | Chạm để xem tên tiếng Việt, biểu tượng, mô tả tác dụng; chọn nhiều lá và xác nhận combo; rút hoặc kết thúc lượt đúng luật |
-| Chờ Nope | Hành động/mục tiêu đang chờ, đồng hồ tối đa 5 giây, nút Nope/Bỏ qua, thông báo quá hạn hoặc chuỗi mới |
-| Thao tác riêng | Chọn mục tiêu, người được xin chọn bài cho, gọi loại bài, xem tối đa 3 lá với nút đóng, cài Mèo Nổ kín ở 0..N (nút đầu/cuối và chọn vị trí) |
+| Chờ Nope | Hành động/mục tiêu đang chờ, chấm than trên ghế bị nhắm và cảnh báo riêng cho mục tiêu khi hành động còn hiệu lực, đồng hồ tối đa 5 giây, nút Nope/Bỏ qua, thông báo quá hạn hoặc chuỗi mới |
+| Mèo Nổ công khai | Tên người dính bom; đang gỡ, đã gỡ an toàn hoặc đã nổ/bị loại; thông báo cho mọi ghế, không lộ vị trí cài |
+| Thao tác riêng | Chọn mục tiêu, người được Xin Bài chọn một lá rồi xác nhận rõ lá/người nhận hoặc hủy chọn, gọi loại bài, xem tối đa 3 lá với nút đóng, cài Mèo Nổ kín ở 0..N (đầu/cuối, chọn vị trí hoặc Ngẫu nhiên, rồi xác nhận) |
 | Tạm dừng / quay lại | Người mất mạng, tình trạng reconnect, phần thao tác đang chờ; chủ phòng có nút hủy ván |
 | Bị loại / kết thúc | Xem công khai nhưng không lộ bài người còn sống; người thắng, trở về phòng chờ, chuẩn bị ván tiếp |
 
