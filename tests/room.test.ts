@@ -108,9 +108,11 @@ describe("phòng chờ và quyền", () => {
         room.state.game!.players.map((player) => player.hand.length),
       ).toEqual(Array(capacity).fill(8));
       expect(room.state.game!.drawPile).toHaveLength(
-        { 3: 53, 4: 47, 5: 40 }[capacity],
+        { 3: 29, 4: 34, 5: 38 }[capacity],
       );
-      expect(room.state.rulesVersion).toBe("original-2022-long");
+      expect(room.state.rulesVersion).toBe(
+        capacity === 3 ? "original-2022" : "original-2022-scaled",
+      );
     },
   );
   test("thiếu ghế dù mọi người ready cũng không bắt đầu", () => {
@@ -484,6 +486,151 @@ describe("lá vừa đánh công khai", () => {
     expect(room.view("b").lastPlay).toBeNull();
     expect(room.view("b").game!.discardPile).toEqual([]);
   });
+});
+
+describe("thông báo lấy bài riêng", () => {
+  test.each([
+    { count: 2, resolution: "pass" },
+    { count: 3, resolution: "pass" },
+    { count: 2, resolution: "deadline" },
+    { count: 3, resolution: "deadline" },
+  ])(
+    "combo $count qua $resolution chỉ báo đúng lá cho hai bên",
+    ({ count, resolution }) => {
+      const room = fixture();
+      const cards = Array.from({ length: count }, (_, index) => ({
+        id: "combo-" + index,
+        type: "tacocat" as const,
+      }));
+      room.state.game!.players[0].hand.push(...cards);
+      expect(
+        send(room, "a", {
+          type: "play",
+          cardIds: cards.map((card) => card.id),
+          targetId: "b",
+          ...(count === 3 ? { requestedType: "defuse" as const } : {}),
+        }).ok,
+      ).toBe(true);
+      expect(room.view("a").lastTransfer).toBeNull();
+      if (resolution === "pass") passAll(room);
+      else {
+        expect(room.expire(5999, () => 0.37)).toBe(false);
+        expect(room.view("a").lastTransfer).toBeNull();
+        expect(room.expire(6000, () => 0.37)).toBe(true);
+      }
+      const event = {
+        id: room.state.version,
+        fromId: "b",
+        toId: "a",
+        cardType: "defuse",
+      };
+      expect(room.view("a").game!.hand.at(-1)).toEqual({
+        id: "defuse-1",
+        type: "defuse",
+      });
+      expect(room.view("b").game!.hand.map((card) => card.id)).toEqual([
+        "nope-1",
+        "taco-1",
+      ]);
+      for (const viewer of ["a", "b"])
+        expect(room.view(viewer).lastTransfer).toEqual(event);
+      for (const viewer of ["c", null]) {
+        expect(room.view(viewer).lastTransfer).toBeNull();
+        expect(JSON.stringify(room.view(viewer))).not.toContain("defuse-1");
+        expect(JSON.stringify(room.view(viewer))).not.toContain('"cardType"');
+      }
+      const restored = new Room(
+        JSON.parse(JSON.stringify(room.state)) as RoomState,
+      );
+      expect(restored.view("a").lastTransfer).toEqual(event);
+      expect(restored.view("b").lastTransfer).toEqual(event);
+      expect(restored.view(null).lastTransfer).toBeNull();
+      const exposed = restored.view("a");
+      exposed.lastTransfer!.cardType = "attack";
+      expect(restored.view("b").lastTransfer).toEqual(event);
+      expect(restored.expire(7000, () => 0.99)).toBe(false);
+      expect(send(restored, "c", { type: "draw" }).ok).toBe(false);
+      expect(restored.view("a").lastTransfer).toEqual(event);
+    },
+  );
+
+  test.each([1, 2])(
+    "%i Nope: không báo chuyển lá bị chặn, phản Nope báo lá thật",
+    (nopeCount) => {
+      const room = fixture();
+      room.state.game!.players[0].hand.push(
+        { id: "combo-1", type: "tacocat" },
+        { id: "combo-2", type: "tacocat" },
+      );
+      send(room, "a", {
+        type: "play",
+        cardIds: ["combo-1", "combo-2"],
+        targetId: "b",
+      });
+      send(room, "b", { type: "nope", cardId: "nope-1" });
+      if (nopeCount === 2) send(room, "c", { type: "nope", cardId: "nope-2" });
+      passAll(room);
+      expect(room.view("a").lastTransfer).toEqual(
+        nopeCount === 1
+          ? null
+          : {
+              id: room.state.version,
+              fromId: "b",
+              toId: "a",
+              cardType: "defuse",
+            },
+      );
+      expect(
+        room.view("b").game!.hand.some((card) => card.id === "defuse-1"),
+      ).toBe(nopeCount === 1);
+    },
+  );
+
+  test.each([2, 3])(
+    "combo %i không lấy được bài vẫn báo kết quả, replay không tạo sự kiện mới",
+    (count) => {
+      const room = fixture();
+      room.state.game!.players[1].hand =
+        count === 2 ? [] : [{ id: "skip-b", type: "skip" }];
+      room.state.game!.players[0].hand.push(
+        ...Array.from({ length: count }, (_, index) => ({
+          id: "combo-" + index,
+          type: "tacocat" as const,
+        })),
+      );
+      send(room, "a", {
+        type: "play",
+        cardIds: Array.from({ length: count }, (_, index) => "combo-" + index),
+        targetId: "b",
+        ...(count === 3 ? { requestedType: "defuse" as const } : {}),
+      });
+      send(room, "a", { type: "pass" });
+      send(room, "b", { type: "pass" });
+      const command = envelope(room, { type: "pass" });
+      const result = room.process("c", command, 1200, () => 0.37);
+      expect(result.ok).toBe(true);
+      expect(JSON.stringify(result)).not.toContain("cardType");
+      const event = {
+        id: room.state.version,
+        fromId: "b",
+        toId: "a",
+        cardType: null,
+      };
+      expect(room.view("a").lastTransfer).toEqual(event);
+      const restored = new Room(structuredClone(room.state));
+      expect(restored.process("c", command, 1300, () => 0.99)).toEqual(result);
+      expect(restored.view("b").lastTransfer).toEqual(event);
+      expect(send(restored, "a", { type: "cancel_game" }).ok).toBe(true);
+      expect(restored.state.lastTransfer).toBeNull();
+      for (const member of restored.state.members)
+        send(restored, member.id, { type: "ready", ready: true });
+      expect(send(restored, "a", { type: "start" }).ok).toBe(true);
+      expect(restored.view("a").lastTransfer).toBeNull();
+      const old = structuredClone(restored.state);
+      delete old.lastTransfer;
+      expect(new Room(old).view("a").lastTransfer).toBeNull();
+    },
+  );
 });
 
 describe("Mèo Nổ công khai và cài bom ngẫu nhiên phía server", () => {
@@ -943,7 +1090,7 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     expect(send(room, "a", { type: "start" }).ok).toBe(true);
     expect(room.state.gameId).not.toBe("old-game");
     expect(room.state.game!.players).toHaveLength(4);
-    expect(room.state.game!.drawPile).toHaveLength(47);
+    expect(room.state.game!.drawPile).toHaveLength(34);
   });
   test("một alarm ưu tiên Nope, heartbeat, rồi TTL; alarm và GET không gia hạn", () => {
     const room = fixture();
@@ -1019,22 +1166,57 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
         "UNSUPPORTED_SCHEMA",
       );
   });
-  test("restart không thêm bài vào ván gốc hoặc ván dài đang chơi", () => {
-    const room = lobby();
-    for (const member of room.state.members)
-      send(room, member.id, { type: "ready", ready: true });
-    expect(send(room, "a", { type: "start" }).ok).toBe(true);
-    expect(new Room(structuredClone(room.state)).state).toEqual(room.state);
-    const classic = structuredClone(room.state);
-    classic.rulesVersion = "original-2022";
-    classic.game!.drawPile = classic.game!.drawPile.filter(
-      (card) => !card.id.startsWith("extra-"),
-    );
-    const restored = new Room(classic);
-    expect(restored.state.rulesVersion).toBe("original-2022");
-    expect(restored.state.game).toEqual(classic.game);
-    expect(restored.state.game!.drawPile).toHaveLength(29);
-  });
+  test.each([
+    "original-2022",
+    "original-2022-long",
+    "original-2022-scaled",
+  ] as const)(
+    "restart không thêm bài hoặc chia lại ván đã lưu theo %s",
+    (rulesVersion) => {
+      const room = lobby();
+      if (rulesVersion === "original-2022-scaled") {
+        send(room, "a", { type: "set_capacity", capacity: 4 });
+        room.addMember("d", "D", "hash-d");
+        room.connect("d", "socket-d");
+      }
+      for (const member of room.state.members)
+        send(room, member.id, { type: "ready", ready: true });
+      expect(send(room, "a", { type: "start" }).ok).toBe(true);
+      room.state.rulesVersion = rulesVersion;
+      if (rulesVersion === "original-2022-long") {
+        for (const [type, count] of [
+          ["attack", 2],
+          ["skip", 3],
+          ["favor", 2],
+          ["shuffle", 3],
+          ["see_future", 2],
+          ["nope", 2],
+          ["tacocat", 2],
+          ["cattermelon", 2],
+          ["hairy_potato_cat", 2],
+          ["beard_cat", 2],
+          ["rainbow_ralphing_cat", 2],
+        ] as const) {
+          room.state.game!.drawPile.push(
+            ...Array.from({ length: count }, (_, index) => ({
+              id: `extra-${type}-${index + 1}`,
+              type,
+            })),
+          );
+        }
+      }
+      const saved = JSON.parse(JSON.stringify(room.state)) as RoomState;
+      const restored = new Room(saved);
+      expect(restored.state).toEqual(saved);
+      expect(restored.state.game!.drawPile).toHaveLength(
+        {
+          "original-2022": 29,
+          "original-2022-long": 53,
+          "original-2022-scaled": 34,
+        }[rulesVersion],
+      );
+    },
+  );
 });
 
 describe("validation biên mạng", () => {

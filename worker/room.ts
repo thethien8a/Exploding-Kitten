@@ -30,7 +30,7 @@ export type Member = {
 };
 export type RoomState = {
   schemaVersion: 1;
-  rulesVersion: "original-2022" | "original-2022-long";
+  rulesVersion: "original-2022" | "original-2022-long" | "original-2022-scaled";
   gameId: string | null;
   lastActivity: number;
   pause: null | { since: number; remainingNopeMs: number | null };
@@ -41,6 +41,7 @@ export type RoomState = {
   hostTransferPending: boolean;
   lastPlay?: RoomSnapshot["lastPlay"];
   lastBomb?: RoomSnapshot["lastBomb"];
+  lastTransfer?: RoomSnapshot["lastTransfer"];
   members: Member[];
   game: GameState | null;
   reaction: null | { deadline: number; passedIds: string[] };
@@ -179,7 +180,11 @@ export class Room {
     if (
       "schemaVersion" in saved &&
       (saved.schemaVersion !== 1 ||
-        !["original-2022", "original-2022-long"].includes(saved.rulesVersion))
+        ![
+          "original-2022",
+          "original-2022-long",
+          "original-2022-scaled",
+        ].includes(saved.rulesVersion))
     )
       throw new Error("UNSUPPORTED_SCHEMA");
     this.state = {
@@ -197,6 +202,7 @@ export class Room {
       pause: "pause" in saved ? saved.pause : null,
       lastPlay: saved.lastPlay ?? null,
       lastBomb: saved.lastBomb ?? null,
+      lastTransfer: saved.lastTransfer ?? null,
       hostTransferPending:
         "hostTransferPending" in saved ? saved.hostTransferPending : false,
       members: saved.members.map((member) => ({
@@ -339,6 +345,33 @@ export class Room {
     if (this.state.hostId !== playerId) throw new Error("NOT_HOST");
   }
 
+  private settleReaction(random: Random): void {
+    const game = this.state.game!;
+    const phase = game.phase;
+    const next = resolveReaction(game, random);
+    if (
+      phase.kind === "reaction" &&
+      phase.nopeCount % 2 === 0 &&
+      (phase.action.type === "pair" || phase.action.type === "triple")
+    ) {
+      const { action } = phase;
+      const hand = game.players.find(
+        (player) => player.id === action.playerId,
+      )!.hand;
+      const received = next.players
+        .find((player) => player.id === action.playerId)!
+        .hand.find((card) => !hand.some((before) => before.id === card.id));
+      this.state.lastTransfer = {
+        id: this.state.version + 1,
+        fromId: action.targetId,
+        toId: action.playerId,
+        cardType: received?.type ?? null,
+      };
+    }
+    this.state.game = next;
+    this.state.reaction = null;
+  }
+
   expire(now: number, random: Random): boolean {
     if (
       this.state.pause ||
@@ -346,8 +379,7 @@ export class Room {
       now < this.state.reaction.deadline
     )
       return false;
-    this.state.game = resolveReaction(this.state.game!, random);
-    this.state.reaction = null;
+    this.settleReaction(random);
     this.state.version++;
     return true;
   }
@@ -430,6 +462,7 @@ export class Room {
         this.state.hostTransferPending = false;
         this.state.lastPlay = null;
         this.state.lastBomb = null;
+        this.state.lastTransfer = null;
         for (const candidate of this.state.members) candidate.ready = false;
         return;
       case "ready":
@@ -459,9 +492,11 @@ export class Room {
           random,
         );
         this.state.gameId = crypto.randomUUID();
-        this.state.rulesVersion = "original-2022-long";
+        this.state.rulesVersion =
+          this.state.capacity === 3 ? "original-2022" : "original-2022-scaled";
         this.state.lastPlay = null;
         this.state.lastBomb = null;
+        this.state.lastTransfer = null;
         for (const candidate of this.state.members) candidate.ready = false;
         return;
       case "kick":
@@ -525,8 +560,7 @@ export class Room {
               this.state.reaction!.passedIds.includes(player.id),
           )
         ) {
-          this.state.game = resolveReaction(this.state.game!, random);
-          this.state.reaction = null;
+          this.settleReaction(random);
         }
         return;
       }
@@ -593,6 +627,13 @@ export class Room {
       gameId: state.gameId,
       lastPlay: game ? (state.lastPlay ?? null) : null,
       lastBomb: game ? (state.lastBomb ?? null) : null,
+      lastTransfer:
+        game &&
+        state.lastTransfer &&
+        (state.lastTransfer.fromId === playerId ||
+          state.lastTransfer.toId === playerId)
+          ? state.lastTransfer
+          : null,
       pause: state.pause
         ? { ...state.pause, missingIds: this.missingIds() }
         : null,

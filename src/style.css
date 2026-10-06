@@ -1164,6 +1164,47 @@ form > button {
 .bomb-warning[data-outcome="defused"] .bomb-symbol {
   color: #31583c;
 }
+.transfer-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #b7c696;
+  border-left: 4px solid #557159;
+  border-radius: 14px;
+  background: #e8eddf;
+}
+.transfer-notice[data-outcome="lost"] {
+  border-color: #e1bba3;
+  border-left-color: var(--accent);
+  background: #f9e7dc;
+}
+.transfer-notice > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.transfer-notice small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.transfer-notice p {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.transfer-symbol {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+.transfer-notice .text-button {
+  flex: 0 0 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 24px;
+  text-decoration: none;
+}
 .return-seat {
   margin-top: 8px;
 }

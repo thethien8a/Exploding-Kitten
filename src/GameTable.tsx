@@ -82,6 +82,9 @@ export function GameTable({
   const [requestedType, setRequestedType] = useState<CardType>("defuse");
   const [position, setPosition] = useState<number | "random">(0);
   const [animatedPlay, setAnimatedPlay] = useState<number | null>(null);
+  const [dismissedTransfer, setDismissedTransfer] = useState<number | null>(
+    null,
+  );
   const previousPlay = useRef(snapshot.lastPlay?.id);
   useEffect(() => {
     setSelected((current) => {
@@ -151,6 +154,14 @@ export function GameTable({
     : lastCard
       ? "Lá bỏ mới nhất · " + CARD_NAMES[lastCard.type]
       : "";
+  const hand = Object.keys(CARD_NAMES).flatMap((type) =>
+    game.hand.filter((card) => card.type === type),
+  );
+  const transfer = snapshot.lastTransfer;
+  const receiving = transfer?.toId === me.id;
+  const partnerName = snapshot.members.find(
+    (member) => member.id === (receiving ? transfer?.fromId : transfer?.toId),
+  )?.name;
   const needsTarget =
     selected.length > 1 ||
     (selected.length === 1 &&
@@ -179,6 +190,60 @@ export function GameTable({
                   : "")}
         </strong>
       </div>
+      {transfer && transfer.id !== dismissedTransfer && (
+        <section
+          className="transfer-notice"
+          data-outcome={
+            transfer.cardType ? (receiving ? "received" : "lost") : "missed"
+          }
+          role="status"
+          aria-label="Kết quả lấy bài"
+        >
+          <svg
+            className="transfer-symbol"
+            viewBox="0 0 48 48"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d={CARD_PATHS[transfer.cardType ?? "favor"] ?? CARD_PATHS.favor}
+            />
+          </svg>
+          <div>
+            <small>Chỉ bạn và {partnerName} thấy</small>
+            <p>
+              {transfer.cardType ? (
+                receiving ? (
+                  <>
+                    Bạn vừa lấy <strong>{CARD_NAMES[transfer.cardType]}</strong>{" "}
+                    từ {partnerName}.
+                  </>
+                ) : (
+                  <>
+                    {partnerName} vừa lấy{" "}
+                    <strong>{CARD_NAMES[transfer.cardType]}</strong> của bạn.
+                  </>
+                )
+              ) : receiving ? (
+                <>Bạn không lấy được lá nào từ {partnerName}.</>
+              ) : (
+                <>{partnerName} không lấy được lá nào của bạn.</>
+              )}
+            </p>
+          </div>
+          <button
+            className="text-button"
+            aria-label="Đóng thông báo lấy bài"
+            onClick={() => setDismissedTransfer(transfer.id)}
+          >
+            ×
+          </button>
+        </section>
+      )}
       {snapshot.pause && (
         <section className="pause-banner" aria-label="Ván tạm dừng">
           <strong>Ván tạm dừng</strong>
@@ -546,13 +611,14 @@ export function GameTable({
           </p>
         )}
         <div className="hand">
-          {game.hand.map((card) => (
+          {hand.map((card) => (
             <button
               key={card.id}
               className={
                 "card" + (selected.includes(card.id) ? " selected" : "")
               }
               data-type={card.type}
+              data-card-id={card.id}
               aria-label={
                 (card.type === "defuse"
                   ? "BẢO VỆ"

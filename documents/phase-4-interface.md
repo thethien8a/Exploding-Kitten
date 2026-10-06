@@ -14,6 +14,12 @@ Cả bàn thấy tên người rút trúng Mèo Nổ và trạng thái đang g�
 
 Đã rút gọn chữ ở trang tạo/vào phòng, phòng chờ và bàn chơi: bỏ chú thích kỹ thuật, nhãn loại bài và hướng dẫn lặp. Giữ lượt/nợ, tên người bị nhắm hoặc dính bom, trạng thái kết nối/pause, lỗi, countdown Nope và xác nhận lá/người nhận. Tác dụng bài chỉ hiện khi chọn bài để đánh; nút cho bài ghi ngắn **Xác nhận**, câu hỏi vẫn nêu đầy đủ lá và người nhận, tên truy cập của nút vẫn đầy đủ.
 
+### Phản hồi chơi nhóm — 06/10/2026
+
+Tay bài tự gom các lá cùng loại cạnh nhau, giữ lựa chọn theo ID và cuộn ngang trên điện thoại. Combo 2/3 lá sau khi chốt có thông báo tên lá lấy được/bị lấy cho riêng hai người liên quan; nếu không lấy được lá nào cũng báo kết quả. Có nút đóng, giữ qua reconnect/restart; người thứ ba không nhận metadata riêng và combo bị Nope chặn không báo đã chuyển bài.
+
+Ván mới bỏ phần thêm cố định 24 lá: 3 người dùng bộ gốc, mỗi ghế thêm bổ sung một lá mỗi loại thường (+11 lá), không thêm Mèo Nổ/Gỡ Bom. Chồng rút đầu ván 3/4/5 người là 29/34/38; vẫn chia 8 lá/người. Ván đã lưu không bị cắt bài hoặc chia lại. Đây là chính sách tăng bài theo nhóm, không phải số lượng gốc Original cho 4/5 người.
+
 Đây là **phần bàn chơi được yêu cầu, không phải hoàn thành toàn bộ Phase 4**. Nghiệm thu thao tác trọn ván trên điện thoại/Safari thật và đánh giá sử dụng với người chơi vẫn còn cần làm. Kết quả, ảnh và giới hạn trong [PROGRESS.md](PROGRESS.md).
 
 ## Màn hình và trạng thái

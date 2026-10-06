@@ -627,6 +627,7 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
     "restart runtime giữ " + phase + ", bài riêng và lượt nợ",
     async ({ browser, request }, testInfo) => {
       const { sessions, saved } = await prepare(request, phase);
+      const given = saved.game!.players[1].hand[1];
       await start();
       const { contexts, pages } = await group(browser, sessions);
       try {
@@ -645,7 +646,9 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
             await expect(
               page.getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
             ).toHaveCount(0);
-          await pages[1].locator(".hand .card").nth(1).click();
+          await pages[1]
+            .locator('.hand .card[data-card-id="' + given.id + '"]')
+            .click();
           expect(
             await pages[1].evaluate(
               () => (window as unknown as TestWindow).wire.commands,
@@ -726,10 +729,9 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           await expect(
             pages[1].locator('.hand .card[aria-pressed="true"]'),
           ).toHaveCount(1);
-          await expect(pages[1].locator(".hand .card").nth(1)).toHaveAttribute(
-            "aria-pressed",
-            "true",
-          );
+          await expect(
+            pages[1].locator('.hand .card[data-card-id="' + given.id + '"]'),
+          ).toHaveAttribute("aria-pressed", "true");
           await pages[1].screenshot({
             path: testInfo.outputPath("target-favor-mobile.png"),
             fullPage: true,
@@ -761,7 +763,6 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
             .poll(async () => (await view(pages[0])).game!.futureCards.length)
             .toBe(0);
         } else if (phase === "favor") {
-          const given = saved.game!.players[1].hand[1];
           const confirm = pages[1].getByRole("button", {
             name: /^Xác nhận đưa/,
           });
@@ -1399,6 +1400,312 @@ for (const count of [2, 3]) {
   );
 }
 
+for (const scenario of [
+  { count: 2, succeeds: true },
+  { count: 3, succeeds: true },
+  { count: 3, succeeds: false },
+]) {
+  test(
+    "tay bài tự gom, thông báo riêng combo " +
+      scenario.count +
+      (scenario.succeeds ? " lấy được bài" : " không có lá gọi tên"),
+    async ({ browser, request }, testInfo) => {
+      const { sessions, saved } = await prepare(request, "turn");
+      const game = saved.game!;
+      const pool = [
+        ...game.drawPile,
+        ...game.players.flatMap((player) => player.hand),
+      ];
+      const hands: CardType[][] = [
+        [
+          "skip",
+          "tacocat",
+          "defuse",
+          "attack",
+          "tacocat",
+          "nope",
+          "tacocat",
+          "skip",
+        ],
+        ["beard_cat"],
+        [
+          "defuse",
+          "favor",
+          "see_future",
+          "nope",
+          "rainbow_ralphing_cat",
+          "hairy_potato_cat",
+          "cattermelon",
+          "shuffle",
+        ],
+      ];
+      for (const [index, types] of hands.entries()) {
+        game.players[index].hand = types.map((type) => {
+          const position = pool.findIndex((card) => card.type === type);
+          expect(position).toBeGreaterThanOrEqual(0);
+          return pool.splice(position, 1)[0];
+        });
+      }
+      game.drawPile = pool;
+      const actorHand = structuredClone(game.players[0].hand);
+      const stolen = game.players[1].hand[0];
+      const combo = actorHand
+        .filter((card) => card.type === "tacocat")
+        .slice(0, scenario.count);
+      await writeStored(saved);
+      await start();
+      const { contexts, pages } = await group(browser, sessions);
+      try {
+        await resumed(pages);
+        const actor = pages[0];
+        await expect
+          .poll(() =>
+            actor
+              .locator(".hand .card")
+              .evaluateAll((cards) =>
+                cards.map((card) => card.getAttribute("data-type")),
+              ),
+          )
+          .toEqual([
+            "defuse",
+            "attack",
+            "skip",
+            "skip",
+            "nope",
+            "tacocat",
+            "tacocat",
+            "tacocat",
+          ]);
+        expect((await view(actor)).game!.hand).toEqual(actorHand);
+        await actor
+          .locator(".table-hand")
+          .screenshot({ path: testInfo.outputPath("sorted-hand-before.png") });
+        const cats = actor.getByRole("button", {
+          name: "LÁ BÀI Mèo Taco",
+          exact: true,
+        });
+        for (let index = 0; index < scenario.count; index++)
+          await cats.nth(index).click();
+        await actor
+          .getByLabel("Mục tiêu (Xin Bài / combo)")
+          .selectOption(sessions[1].playerId);
+        if (scenario.count === 3)
+          await actor
+            .getByLabel("Loại bài gọi tên")
+            .selectOption(scenario.succeeds ? "beard_cat" : "attack");
+        await actor
+          .getByRole("button", {
+            name: "Đánh " + scenario.count + " lá đã chọn",
+          })
+          .click();
+        await expect
+          .poll(async () => (await view(actor)).game!.phase.kind)
+          .toBe("reaction");
+        const played = await actor.evaluate(() =>
+          (window as unknown as TestWindow).wire.commands.at(-1)!,
+        );
+        expect(played.action).toEqual({
+          type: "play",
+          cardIds: combo.map((card) => card.id),
+          targetId: sessions[1].playerId,
+          ...(scenario.count === 3
+            ? { requestedType: scenario.succeeds ? "beard_cat" : "attack" }
+            : {}),
+        });
+        for (const page of pages)
+          await expect(
+            page.getByRole("status", { name: "Kết quả lấy bài" }),
+          ).toHaveCount(0);
+        await resumed(pages, played.version + 1);
+        let settled: CommandResult | undefined;
+        for (const page of pages) {
+          settled = await command(page, { type: "pass" });
+          expect(settled.ok).toBe(true);
+          await resumed(pages, settled.version);
+        }
+        const event = {
+          id: settled!.version,
+          fromId: sessions[1].playerId,
+          toId: sessions[0].playerId,
+          cardType: scenario.succeeds ? "beard_cat" : null,
+        };
+        const messages = [
+          scenario.succeeds
+            ? "Bạn vừa lấy Mèo Râu từ Minh."
+            : "Bạn không lấy được lá nào từ Minh.",
+          scenario.succeeds
+            ? "Thảo vừa lấy Mèo Râu của bạn."
+            : "Thảo không lấy được lá nào của bạn.",
+        ];
+        for (const [index, message] of messages.entries()) {
+          expect((await view(pages[index])).lastTransfer).toEqual(event);
+          await expect(
+            pages[index]
+              .getByRole("status", { name: "Kết quả lấy bài" })
+              .locator("p"),
+          ).toHaveText(message);
+        }
+        const expectedHand = actorHand.filter(
+          (card) => !combo.some((played) => played.id === card.id),
+        );
+        if (scenario.succeeds) expectedHand.push(stolen);
+        expect((await view(actor)).game!.hand).toEqual(expectedHand);
+        expect((await view(pages[1])).game!.hand).toEqual(
+          scenario.succeeds ? [] : [stolen],
+        );
+        await expect(
+          actor.locator('.hand .card[data-type="skip"]'),
+        ).toHaveCount(2);
+        const observer = await view(pages[2]);
+        expect(observer.lastTransfer).toBeNull();
+        expect(JSON.stringify(observer)).not.toContain(stolen.id);
+        expect(JSON.stringify(observer)).not.toContain('"cardType"');
+        await expect(
+          pages[2].getByRole("status", { name: "Kết quả lấy bài" }),
+        ).toHaveCount(0);
+        const publicView = (await (
+          await request.get("/api/rooms/" + saved.roomId)
+        ).json()) as RoomSnapshot;
+        expect(publicView.lastTransfer).toBeNull();
+        expect(JSON.stringify(publicView)).not.toContain(stolen.id);
+        await actor.screenshot({
+          path: testInfo.outputPath("transfer-received-desktop.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        for (const width of [390, 320]) {
+          await pages[1].setViewportSize({ width, height: 844 });
+          expect(
+            await pages[1].evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          ).toBe(true);
+          await expect(
+            pages[1].getByRole("button", { name: "Đóng thông báo lấy bài" }),
+          ).toBeInViewport();
+          await pages[1].screenshot({
+            path: testInfo.outputPath("transfer-lost-mobile-" + width + ".png"),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+        await actor
+          .getByRole("button", { name: "Đóng thông báo lấy bài" })
+          .click();
+        const lastPass = await pages[2].evaluate(() =>
+          (window as unknown as TestWindow).wire.commands.at(-1)!,
+        );
+        expect(
+          (
+            await command(pages[2], lastPass.action, {
+              id: lastPass.id,
+              version: lastPass.version,
+            })
+          ).ok,
+        ).toBe(true);
+        await expect(
+          actor.getByRole("status", { name: "Kết quả lấy bài" }),
+        ).toHaveCount(0);
+        await stop();
+        const durable = await readStored(saved.roomId);
+        expect(durable.lastTransfer).toEqual(event);
+        await start();
+        await resumed(pages, durable.version + 1);
+        expect((await view(actor)).game!.hand).toEqual(expectedHand);
+        expect((await view(pages[1])).lastTransfer).toEqual(event);
+        await expect(
+          pages[1]
+            .getByRole("status", { name: "Kết quả lấy bài" })
+            .locator("p"),
+        ).toHaveText(messages[1]);
+        await expect(
+          actor.getByRole("status", { name: "Kết quả lấy bài" }),
+        ).toHaveCount(0);
+      } finally {
+        await Promise.all(contexts.map((context) => context.close()));
+      }
+    },
+  );
+}
+
+test("Attack qua Worker cộng 2, 4, 6 lượt; trả một lượt rồi chuyển 5 + 2 sau restart", async ({
+  browser,
+  request,
+}) => {
+  const { sessions, saved } = await prepare(request, "turn");
+  const game = saved.game!;
+  const attacks = [
+    ...game.drawPile,
+    ...game.players.flatMap((player) => player.hand),
+  ].filter((card) => card.type === "attack");
+  expect(attacks).toHaveLength(4);
+  game.drawPile = game.drawPile.filter((card) => card.type !== "attack");
+  for (const player of game.players) {
+    player.hand = player.hand.filter((card) => card.type !== "attack");
+    player.hand.push(attacks.shift()!);
+  }
+  game.players[0].hand.push(...attacks);
+  game.turn = { playerId: sessions[0].playerId, remaining: 1, attacked: false };
+  const safe = game.drawPile.findIndex(
+    (card) => card.type !== "exploding_kitten",
+  );
+  [game.drawPile[0], game.drawPile[safe]] = [
+    game.drawPile[safe],
+    game.drawPile[0],
+  ];
+  await writeStored(saved);
+  await start();
+  const { contexts, pages } = await group(browser, sessions);
+  try {
+    await resumed(pages);
+    for (const [index, debt] of [2, 4, 6, 7].entries()) {
+      if (index === 3) {
+        const drawn = await command(pages[0], { type: "draw" });
+        expect(drawn.ok).toBe(true);
+        await resumed(pages, drawn.version);
+        expect((await view(pages[0])).game!.turn).toEqual({
+          playerId: sessions[0].playerId,
+          remaining: 5,
+          attacked: true,
+        });
+        await stop();
+        const durable = await readStored(saved.roomId);
+        await start();
+        await resumed(pages, durable.version + 1);
+        expect((await view(pages[0])).game!.turn).toEqual(durable.game!.turn);
+      }
+      const actor = pages[index % 3];
+      await actor
+        .getByRole("button", { name: "LÁ BÀI Tấn Công", exact: true })
+        .first()
+        .click();
+      await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
+      await expect
+        .poll(async () => (await view(actor)).game!.phase.kind)
+        .toBe("reaction");
+      await resumed(pages, (await view(actor)).version);
+      for (const page of pages) {
+        const passed = await command(page, { type: "pass" });
+        expect(passed.ok).toBe(true);
+        await resumed(pages, passed.version);
+      }
+      const next = (index + 1) % 3;
+      for (const page of pages) {
+        expect((await view(page)).game!.turn).toEqual({
+          playerId: sessions[next].playerId,
+          remaining: debt,
+          attacked: true,
+        });
+        await expect(page.locator(".table-turn")).toHaveText(
+          "Lượt của " + ["Thảo", "Minh", "An"][next] + " · " + debt + " lượt",
+        );
+      }
+    }
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test("không tự Nope nhưng được phản Nope của người khác, kể cả sau restart", async ({
   browser,
   request,
@@ -1617,7 +1924,7 @@ test("chủ rời giữ ghế và chuyển quyền, hủy/tái đấu rồi chơ
     expect((await command(pages[1], { type: "start" })).ok).toBe(true);
     await expect
       .poll(async () => (await view(pages[1])).game!.drawCount)
-      .toBe(47);
+      .toBe(34);
     expect((await view(pages[1])).gameId).not.toBe(nextId);
     for (const page of pages) {
       await expect(

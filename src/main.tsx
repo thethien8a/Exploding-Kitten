@@ -394,7 +394,7 @@ function App() {
     <main className="lab">
       <header className="masthead">
         <Brand />
-        <span className="phase">VÁN DÀI · +24 LÁ</span>
+        <span className="phase">BÀI THEO SỐ NGƯỜI</span>
       </header>
       {!validRoom && (
         <p className="error" role="alert">

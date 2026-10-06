@@ -105,7 +105,7 @@ function seededRandom(seed: number): Random {
   };
 }
 
-describe("bộ gốc Original Edition 2022 và ván dài", () => {
+describe("bộ gốc Original Edition 2022 và số bài theo số người", () => {
   test("56 ID duy nhất, đủ 13 loại với số lượng từ PDF", () => {
     const deck = createDeck();
     expect(deck).toHaveLength(56);
@@ -134,9 +134,33 @@ describe("bộ gốc Original Edition 2022 và ván dài", () => {
   });
 
   test.each([
-    { players: 3, deck: 53, bombs: 2, defuses: 5, removed: 3 },
-    { players: 4, deck: 47, bombs: 3, defuses: 6, removed: 1 },
-    { players: 5, deck: 40, bombs: 4, defuses: 6, removed: 0 },
+    {
+      players: 3,
+      deck: 29,
+      bombs: 2,
+      defuses: 5,
+      removed: 3,
+      total: 56,
+      extraCopies: 0,
+    },
+    {
+      players: 4,
+      deck: 34,
+      bombs: 3,
+      defuses: 6,
+      removed: 1,
+      total: 67,
+      extraCopies: 1,
+    },
+    {
+      players: 5,
+      deck: 38,
+      bombs: 4,
+      defuses: 6,
+      removed: 0,
+      total: 78,
+      extraCopies: 2,
+    },
   ])("$players người: chồng $deck lá, $bombs bom", (expected) => {
     const ids = seats.slice(0, expected.players);
     const game = createGame(ids, seededRandom(149));
@@ -173,13 +197,13 @@ describe("bộ gốc Original Edition 2022 và ván dài", () => {
     expect(game.turn.remaining).toBe(1);
     expect(game.turn.attacked).toBe(false);
     const cards = inventory(game);
-    expect(cards).toHaveLength(80);
-    expect(new Set(cards.map((card) => card.id)).size).toBe(80);
+    expect(cards).toHaveLength(expected.total);
+    expect(new Set(cards.map((card) => card.id)).size).toBe(expected.total);
     expect(cards.filter((card) => !card.id.startsWith("extra-"))).toEqual(
       createDeck().sort((a, b) => a.id.localeCompare(b.id)),
     );
     const extra = game.drawPile.filter((card) => card.id.startsWith("extra-"));
-    expect(extra).toHaveLength(24);
+    expect(extra).toHaveLength(expected.total - 56);
     expect(
       Object.fromEntries(
         [...new Set(extra.map((card) => card.type))].map((type) => [
@@ -187,19 +211,23 @@ describe("bộ gốc Original Edition 2022 và ván dài", () => {
           extra.filter((card) => card.type === type).length,
         ]),
       ),
-    ).toEqual({
-      attack: 2,
-      skip: 3,
-      favor: 2,
-      shuffle: 3,
-      see_future: 2,
-      nope: 2,
-      tacocat: 2,
-      cattermelon: 2,
-      hairy_potato_cat: 2,
-      beard_cat: 2,
-      rainbow_ralphing_cat: 2,
-    });
+    ).toEqual(
+      expected.extraCopies === 0
+        ? {}
+        : {
+            attack: expected.extraCopies,
+            skip: expected.extraCopies,
+            favor: expected.extraCopies,
+            shuffle: expected.extraCopies,
+            see_future: expected.extraCopies,
+            nope: expected.extraCopies,
+            tacocat: expected.extraCopies,
+            cattermelon: expected.extraCopies,
+            hairy_potato_cat: expected.extraCopies,
+            beard_cat: expected.extraCopies,
+            rainbow_ralphing_cat: expected.extraCopies,
+          },
+    );
   });
 
   test("Gỡ Bom dư được trộn trước khi chia, không đảm bảo mỗi tay chỉ có một", () => {
@@ -211,7 +239,7 @@ describe("bộ gốc Original Edition 2022 và ván dài", () => {
       game.players[0].hand.filter((card) => card.type === "defuse"),
     ).toHaveLength(2);
     expect(game.players[0].hand).toHaveLength(8);
-    expect(game.drawPile).toHaveLength(53);
+    expect(game.drawPile).toHaveLength(29);
   });
 
   test.each([
@@ -1143,7 +1171,7 @@ describe("bất biến và dữ liệu thuần", () => {
     );
   });
 
-  test.each([3, 4, 5])(
+  test.each([3, 4, 5] as const)(
     "12 ván %i người: rút/Gỡ Bom tới thắng, không mất/trùng bất kỳ ID nào",
     (count) => {
       for (let seed = 1; seed <= 12; seed++) {
@@ -1165,7 +1193,7 @@ describe("bất biến và dữ liệu thuần", () => {
         }
         expect(game.phase.kind).toBe("finished");
         expect(commands).toBeLessThan(100);
-        expect(inventory(game)).toHaveLength(80);
+        expect(inventory(game)).toHaveLength({ 3: 56, 4: 67, 5: 78 }[count]);
         expect(
           game.discardPile.filter((card) => card.type === "exploding_kitten"),
         ).toHaveLength(count - 1);

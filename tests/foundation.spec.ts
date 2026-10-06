@@ -347,7 +347,7 @@ for (const capacity of [3, 4, 5]) {
           const snapshot = snapshots[index];
           expect(snapshot.game!.hand).toHaveLength(8);
           expect(snapshot.game!.drawCount).toBe(
-            { 3: 53, 4: 47, 5: 40 }[capacity],
+            { 3: 29, 4: 34, 5: 38 }[capacity],
           );
           const payload = JSON.stringify(snapshot);
           expect(payload).not.toMatch(
@@ -476,7 +476,7 @@ for (const capacity of [3, 4, 5]) {
         for (const page of pages.slice(0, capacity))
           await expect
             .poll(async () => (await view(page)).game!.drawCount)
-            .toBe({ 3: 52, 4: 46, 5: 39 }[capacity]);
+            .toBe({ 3: 28, 4: 33, 5: 37 }[capacity]);
         expect((await view(actor)).version).toBe(version + 1);
         expect(await view(other)).toEqual(isolated);
         for (const page of pages.slice(0, capacity))
@@ -1404,7 +1404,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
             hand.scrollLeft = hand.scrollWidth;
           });
           const last = page.getByRole("button", {
-            name: "LÁ BÀI Mèo Dưa Hấu",
+            name: "LÁ BÀI Mèo Cầu Vồng",
             exact: true,
           });
           await expect(last).toBeInViewport();

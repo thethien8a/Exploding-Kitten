@@ -60,6 +60,12 @@ export type RoomSnapshot = {
     playerId: string;
     outcome: "defusing" | "defused" | "exploded";
   };
+  lastTransfer?: null | {
+    id: number;
+    fromId: string;
+    toId: string;
+    cardType: CardType | null;
+  };
   pause: null | {
     since: number;
     missingIds: string[];
