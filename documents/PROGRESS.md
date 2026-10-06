@@ -6,6 +6,7 @@
 - **Đã có:** multiplayer, bài kín, lưu/khôi phục mọi giai đoạn, pause/resume, heartbeat/alarm, hủy/tái đấu, expiry và bàn chơi riêng; đã sửa giữ lựa chọn sau rút, tự Nope, thông báo/cảnh báo mục tiêu Xin Bài/combo và xác nhận trước khi cho Xin Bài. Đã thêm trạng thái bom công khai, cài ngẫu nhiên và biến thể ván dài thêm 24 lá thường. UI đã rút gọn chú thích, giữ thông tin hành động/cảnh báo quan trọng và giải thích bài khi chọn. 175 test Vitest (96 luật + 79 phòng) và 26 test Playwright đạt, retries 0; TypeScript/build/format đạt.
 - **Giới hạn bằng chứng:** runtime Cloudflare local và mobile Chrome mô phỏng; chưa deploy, kiểm thử điện thoại/Safari thật, quota/CPU/hibernation sau eviction production hoặc khôi phục qua deploy. Không dùng bản thử làm bản phát hành công khai.
 - **Bàn giao:** Phase 2–3, bàn B và các bản sửa trước đã commit/push lên `origin/main`, gồm [bdcba36](https://github.com/thethien8a/Exploding-Kitten/commit/bdcba366af36e00cc42f1a8d8f6965d8bfdc565c). Cảnh báo/xác nhận cho bài, trạng thái bom, cài ngẫu nhiên, bộ bài dài, UI rút gọn và khôi phục bố trí cài bom đã commit/push theo yêu cầu trong [abf9b8c](https://github.com/thethien8a/Exploding-Kitten/commit/abf9b8cb2e19ff361a15145b944715bde6b227b9); HEAD GitHub khớp local. Chưa deploy. Dev server bản mới ở `http://127.0.0.1:5173/`; tải lại tab và bắt đầu ván mới để có chồng rút dài. Nếu dùng preview cần build và khởi động lại frontend/Worker cùng phiên bản. Giữ `.wrangler/state/v3/`.
+- **Thay đổi local mới:** theo yêu cầu tiếp theo, đã bỏ hai nút Trên cùng/Dưới cùng, giữ thứ tự ô số → Ngẫu nhiên → xác nhận. Cho nhập số để chuyển lại từ Ngẫu nhiên. Đã kiểm chứng local; thay đổi mới này chưa commit/push/deploy.
 
 ## Theo dõi phase
 
@@ -330,6 +331,15 @@ Hạn mức công bố khi kiểm tra: Worker động 100.000 request/ngày, 10 
 - **Render:** đã inspect desktop 1280px và mobile 320px ở chế độ nhập số/ngẫu nhiên; đủ nút, đúng thứ tự cũ, không clipping/chồng lấp. Browser cũng kiểm tra không tràn ngang tại 390px. Bundle frontend/CSS sau rollback trùng bản trước lần chỉnh điều khiển.
 - **Bằng chứng:** `.amp/in/artifacts/bomb-placement-rollback-final-test.log`, `bomb-placement-rollback-format.log`, `bomb-placement-rollback-results.json`; ảnh `rollback-bomb-placement-{1280,390,320}-{defuse,defuse-random}.png`.
 - **Bàn giao:** đã commit/push chương trình lên `origin/main` theo yêu cầu sau rollback: [abf9b8c](https://github.com/thethien8a/Exploding-Kitten/commit/abf9b8cb2e19ff361a15145b944715bde6b227b9). `git ls-remote origin refs/heads/main` khớp HEAD local sau push; không deploy. Chỉ bàn giao mã/tài liệu/test liên quan, không thêm thay đổi `.gitignore` có sẵn, dữ liệu SQLite, phiên, ảnh/log hoặc metadata agent. Giữ dev 5173 và `.wrangler/state/v3/`; runtime/SQLite test đã đóng/dọn. Bước tiếp theo là tải lại tab bản local để thử bố trí cài bom đã khôi phục.
+
+### 05/10/2026 — Bỏ hai nút cài bom đầu/cuối, giữ thứ tự còn lại
+
+- **Theo yêu cầu mới:** chỉ bỏ nút Trên cùng/Dưới cùng, giữ chú thích 0/N và thứ tự ô số → Ngẫu nhiên → xác nhận. Không di chuyển xác nhận lên trước Ngẫu nhiên, sửa CSS, luật hoặc server.
+- **Thao tác:** ô số cho nhập cả khi Ngẫu nhiên đang được chọn, nhập số sẽ bỏ chọn Ngẫu nhiên. Như vậy vẫn chọn đầu/cuối bằng 0/N và quay lại vị trí số mà không cần hai nút đã bỏ. Ngẫu nhiên vẫn chỉ chọn chế độ, bấm lại không tắt; chỉ xác nhận mới gửi lệnh. Giữ khóa ô/nút khi chờ ACK/pause/mất mạng.
+- **Kiểm chứng:** test cập nhật thất bại trước sửa vì còn hai nút thừa. Sau sửa, `npm run test:engine` đạt `175 passed`; build/TypeScript/format và `git diff --check` đạt. Browser tập trung `giao diện mobile|restart runtime giữ defuse` đạt `2 passed (15.5s)`, retries 0, không skipped/flaky. Kiểm tra nhập 0/7, chuyển Ngẫu nhiên về số, không gửi trước xác nhận, gửi đúng số 3 hoặc `"random"`, khóa chờ ACK và giữ lựa chọn qua restart/replay. Không chạy lại toàn bộ 26 ca browser cho thay đổi cục bộ này.
+- **Render:** đã inspect desktop 1280px nhập số và mobile 320px ở cả hai chế độ. Không còn hai nút đầu/cuối; nhãn/nút đầy đủ, không clipping/chồng lấp. Mobile giữ ô số và Ngẫu nhiên ở hàng đầu, xác nhận xuống hàng sau. Browser kiểm tra không tràn ngang tại 1280/390/320px.
+- **Bằng chứng:** `.amp/in/artifacts/remove-bomb-shortcuts-before.log`, `remove-bomb-shortcuts-before-results.json`, `remove-bomb-shortcuts-focused.log`, `remove-bomb-shortcuts-unit-format.log`, `remove-bomb-shortcuts-results.json`; ảnh `remove-bomb-shortcuts-{1280,390,320}-{defuse,defuse-random}.png`.
+- **Bàn giao:** thay đổi local, chưa commit/push/deploy. Giữ dev 5173, dữ liệu `.wrangler/state/v3/` và thay đổi `.gitignore` có sẵn; runtime/SQLite test đã đóng/dọn. Bước tiếp theo là tải lại tab để dùng cụm cài bom đã rút gọn.
 
 ### Mẫu cho lần cập nhật tiếp theo
 

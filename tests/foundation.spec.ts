@@ -1108,8 +1108,6 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           "Cài Mèo Nổ (0 = trên cùng, 7 = dưới cùng)",
         );
         await expect(placement.getByRole("button")).toHaveText([
-          "Trên cùng",
-          "Dưới cùng",
           "Ngẫu nhiên",
           "Cài kín vị trí này",
         ]);
@@ -1124,23 +1122,20 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         await input.fill("3");
         await random.click();
         await expect(random).toHaveAttribute("aria-pressed", "true");
-        await expect(input).toBeDisabled();
+        await expect(input).toBeEnabled();
+        await expect(input).toHaveValue("");
         await expect(confirm).toHaveText("Cài bom ngẫu nhiên");
         await expect(page.locator(".private-choice p")).toHaveCount(0);
         await random.click();
         await expect(random).toHaveAttribute("aria-pressed", "true");
-        await expect(input).toBeDisabled();
-        await page
-          .getByRole("button", { name: "Trên cùng", exact: true })
-          .click();
+        await expect(input).toBeEnabled();
+        await input.fill("0");
         await expect(random).toHaveAttribute("aria-pressed", "false");
         await expect(input).toHaveValue("0");
         await expect(input).toBeEnabled();
         await expect(confirm).toHaveText("Cài kín vị trí này");
         await expect(confirm).toBeEnabled();
-        await page
-          .getByRole("button", { name: "Dưới cùng", exact: true })
-          .click();
+        await input.fill("7");
         await expect(input).toHaveValue("7");
         await expect(confirm).toBeEnabled();
         if (state === "defuse-random") await random.click();

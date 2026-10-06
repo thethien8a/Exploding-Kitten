@@ -30,7 +30,7 @@ npm run preview
 
 Mở <http://127.0.0.1:4173/>. Nếu đã có preview bản cũ chạy ở cổng này, cần dừng và chạy lại trước khi thử build mới; không dùng frontend mới với Worker cũ.
 
-Trong lượt, chọn 1 lá tác dụng hoặc 2/3 lá cùng tên, chọn mục tiêu khi cần, rồi xác nhận đánh; rút bài để kết thúc lượt. Người cho tự chọn bài, người xem tương lai có nút đóng, người gỡ bom chọn kín vị trí 0..N, nút Trên cùng/Dưới cùng hoặc **Ngẫu nhiên**, rồi xác nhận cài bom. Chọn Ngẫu nhiên chưa gửi lệnh; khi xác nhận, server chọn một trong N+1 vị trí, không trả vị trí đã chọn xuống client. Nope/Bỏ qua chỉ dùng trong cửa sổ 5 giây. Bàn oval B là phần UX đã chọn, chưa phải nghiệm thu đầy đủ Phase 4.
+Trong lượt, chọn 1 lá tác dụng hoặc 2/3 lá cùng tên, chọn mục tiêu khi cần, rồi xác nhận đánh; rút bài để kết thúc lượt. Người cho tự chọn bài, người xem tương lai có nút đóng, người gỡ bom nhập kín vị trí 0..N hoặc chọn **Ngẫu nhiên**, rồi xác nhận cài bom. Nhập 0/N để chọn đầu/cuối; nhập số sẽ bỏ chọn Ngẫu nhiên. Chọn Ngẫu nhiên chưa gửi lệnh; khi xác nhận, server chọn một trong N+1 vị trí, không trả vị trí đã chọn xuống client. Nope/Bỏ qua chỉ dùng trong cửa sổ 5 giây. Bàn oval B là phần UX đã chọn, chưa phải nghiệm thu đầy đủ Phase 4.
 
 Khi người còn sống mất kết nối, ván tạm dừng và giữ bài, lượt nợ, lựa chọn đang chờ cùng thời gian Nope còn lại. Cả nhóm sống quay lại thì tiếp tục. Menu **Phòng** chứa link mời và **Rời ván (giữ ghế)** để ngừng tự reconnect; bấm **Quay lại ghế** để trở lại. Chủ rời chủ động chuyển quyền cho người online; mất mạng thụ động không đổi chủ. Trong menu này, chủ phòng có thể **Hủy ván về phòng chờ**, hoặc **Về phòng chờ** sau kết thúc để đổi số người và tổ chức ván mới.
 

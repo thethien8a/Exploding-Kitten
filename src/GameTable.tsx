@@ -501,23 +501,9 @@ export function GameTable({
               min={0}
               max={game.drawCount}
               value={position === "random" ? "" : position}
-              disabled={locked || position === "random"}
+              disabled={locked}
               onChange={(event) => setPosition(Number(event.target.value))}
             />
-            <button
-              className="secondary outline-button"
-              disabled={locked}
-              onClick={() => setPosition(0)}
-            >
-              Trên cùng
-            </button>
-            <button
-              className="secondary outline-button"
-              disabled={locked}
-              onClick={() => setPosition(game.drawCount)}
-            >
-              Dưới cùng
-            </button>
             <button
               className="secondary outline-button"
               aria-pressed={position === "random"}
