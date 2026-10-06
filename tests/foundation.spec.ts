@@ -171,13 +171,30 @@ for (const capacity of [3, 4, 5]) {
           host.getByRole("heading", { name: "Tạo phòng", exact: true }),
         ).toBeVisible();
         await expect(
-          host.locator(".intro p, .entry-panel .connection-note, footer"),
-        ).toHaveCount(0);
-        if (capacity === 3)
-          await host.screenshot({
-            path: testInfo.outputPath("phase-2-home.png"),
-            fullPage: true,
-          });
+          host.getByRole("heading", { name: /Lá bài nhỏ.*Cú nổ lớn/ }),
+        ).toBeVisible();
+        await expect(
+          host.getByLabel("Bắt đầu cùng bạn bè").getByRole("listitem"),
+        ).toHaveCount(3);
+        if (capacity === 3) {
+          for (const width of [1280, 900, 390, 320]) {
+            await host.setViewportSize({ width, height: 844 });
+            expect(
+              await host.evaluate(
+                () => document.documentElement.scrollWidth <= innerWidth,
+              ),
+            ).toBe(true);
+            await expect(host.getByLabel("Tên của bạn")).toBeInViewport();
+            await expect(
+              host.getByRole("button", { name: "Tạo phòng", exact: true }),
+            ).toBeInViewport();
+            await host.screenshot({
+              path: testInfo.outputPath("modern-home-" + width + ".png"),
+              fullPage: true,
+            });
+          }
+          await host.setViewportSize({ width: 1280, height: 900 });
+        }
         await host.getByLabel("Tên của bạn").fill("Thảo");
         await host
           .getByLabel("Số người chơi", { exact: true })
@@ -201,6 +218,7 @@ for (const capacity of [3, 4, 5]) {
         await expect(
           host.getByRole("button", { name: "Bắt đầu ván" }),
         ).toBeDisabled();
+        await expect(host.locator(".empty-seat")).toHaveCount(capacity - 1);
         for (let index = 1; index < capacity; index++) {
           await pages[index].goto(link);
           await pages[index]
@@ -221,6 +239,17 @@ for (const capacity of [3, 4, 5]) {
         }
         for (const page of pages.slice(0, capacity))
           await expect(page.getByTestId("member")).toHaveCount(capacity);
+        await expect(host.locator(".empty-seat")).toHaveCount(0);
+        await pages[capacity].goto(link);
+        await expect(pages[capacity].locator(".invitation-state")).toHaveText(
+          "Phòng đã đủ người. Hãy tạo một bàn mới nhé.",
+        );
+        await expect(
+          pages[capacity].getByRole("button", {
+            name: "Vào phòng",
+            exact: true,
+          }),
+        ).toBeDisabled();
         expect(
           new Set(
             (await Promise.all(pages.slice(0, capacity).map(view))).map(
@@ -240,6 +269,12 @@ for (const capacity of [3, 4, 5]) {
           await pages[index]
             .getByRole("button", { name: "Sẵn sàng", exact: true })
             .click();
+          await expect(
+            pages[index].getByRole("button", {
+              name: "Hủy sẵn sàng",
+              exact: true,
+            }),
+          ).toHaveAttribute("aria-pressed", "true");
           await expect
             .poll(
               async () =>
@@ -260,6 +295,16 @@ for (const capacity of [3, 4, 5]) {
           });
         }
         await host.getByRole("button", { name: "Bắt đầu ván" }).click();
+        await pages[capacity].reload();
+        await expect(pages[capacity].locator(".invitation-state")).toHaveText(
+          "Ván đã bắt đầu. Hẹn bạn ở ván tiếp theo!",
+        );
+        await expect(
+          pages[capacity].getByRole("button", {
+            name: "Vào phòng",
+            exact: true,
+          }),
+        ).toBeDisabled();
         for (const page of pages.slice(0, capacity)) {
           await expect(
             page.getByRole("heading", { name: "Bàn chơi Mèo Nổ" }),
@@ -998,6 +1043,70 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           await expect(warning).toHaveCount(nopeCount === 3 ? 0 : 1);
           await expect(marker).toHaveCount(nopeCount === 3 ? 0 : 1);
         }
+        const timer = page.getByRole("progressbar", {
+          name: "Thời gian phản ứng Nope",
+        });
+        const paused = structuredClone(snapshot);
+        paused.pause = {
+          since: Date.now(),
+          missingIds: ["b"],
+          remainingNopeMs: 1250,
+        };
+        paused.members[1].connected = false;
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          paused,
+        );
+        await expect(timer).toHaveAttribute("aria-valuenow", "2");
+        await expect(timer.locator("span")).toHaveAttribute(
+          "style",
+          "width: 25%;",
+        );
+        await page.waitForTimeout(1100);
+        await expect(timer).toHaveAttribute("aria-valuenow", "2");
+        await expect(timer.locator("span")).toHaveAttribute(
+          "style",
+          "width: 25%;",
+        );
+        await page.screenshot({
+          path: testInfo.outputPath("modern-paused-nope.png"),
+          fullPage: true,
+        });
+        const resumed = structuredClone(snapshot);
+        resumed.game!.reaction!.deadline = Date.now() - 100;
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          resumed,
+        );
+        await expect(timer).toHaveAttribute("aria-valuenow", "0");
+        await expect(timer.locator("span")).toHaveAttribute(
+          "style",
+          "width: 0%;",
+        );
+        resumed.game!.reaction!.deadline = Date.now() + 5000;
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          resumed,
+        );
+        await expect(timer).toHaveAttribute("aria-valuenow", "5");
+        await expect
+          .poll(async () => Number(await timer.getAttribute("aria-valuenow")))
+          .toBeLessThan(5);
       }
       if (state === "future")
         await expect(

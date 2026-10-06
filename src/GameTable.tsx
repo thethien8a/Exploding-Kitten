@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   CARD_NAMES,
+  NOPE_WINDOW_MS,
   type RoomAction,
   type RoomSnapshot,
   type Session,
 } from "../shared/protocol";
 import type { CardType } from "../shared/engine";
+import { CatMark } from "./Brand";
+import { CardFace, CARD_PATHS } from "./CardFace";
 
 const CARD_COPY: Record<CardType, string> = {
   exploding_kitten: "Cần Gỡ Bom để sống sót.",
@@ -22,43 +25,6 @@ const CARD_COPY: Record<CardType, string> = {
   beard_cat: "Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
   rainbow_ralphing_cat: "Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
 };
-const CARD_PATHS: Partial<Record<CardType, string>> = {
-  defuse: "M24 5 39 11V23c0 10-15 19-15 19S9 33 9 23V11Z M17 23l5 5 10-12",
-  attack: "M9 38 24 9M23 38 38 9M16 10l8-1 3 8M30 10l8-1 3 8",
-  skip: "M24 5a19 19 0 1 0 0 38 19 19 0 1 0 0-38M11 11l26 26",
-  favor: "M5 24h18l-6-6M23 24l-6 6M43 12H25l6-6M25 12l6 6",
-  shuffle:
-    "M5 12h7c9 0 15 24 24 24h7M36 29l7 7-7 7M5 36h7c9 0 15-24 24-24h7M36 5l7 7-7 7",
-  see_future:
-    "M3 24s8-14 21-14 21 14 21 14-8 14-21 14S3 24 3 24ZM24 16a8 8 0 1 0 0 16 8 8 0 1 0 0-16",
-  nope: "M13 28V14a3 3 0 0 1 6 0v10V8a3 3 0 0 1 6 0v16V10a3 3 0 0 1 6 0v14V15a3 3 0 0 1 6 0v17c0 9-6 12-13 12-8 0-12-7-17-14a3 3 0 0 1 5-4l7 8",
-  exploding_kitten:
-    "M24 13a14 14 0 1 0 0 28 14 14 0 1 0 0-28M24 13V6h8M32 6l4-4M37 9l5 2",
-};
-function CardFace({ type }: { type: CardType }) {
-  return (
-    <>
-      <svg
-        className="card-symbol"
-        viewBox="0 0 48 48"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path
-          d={
-            CARD_PATHS[type] ??
-            "M10 22V8l10 7h8l10-7v14c0 12-7 18-14 18s-14-6-14-18ZM17 24h1M30 24h1M21 31h6"
-          }
-        />
-      </svg>
-      <strong>{CARD_NAMES[type]}</strong>
-    </>
-  );
-}
 const TABLE_SEATS = {
   3: [
     [50, 86],
@@ -190,6 +156,11 @@ export function GameTable({
     (selected.length === 1 &&
       game.hand.find((card) => card.id === selected[0])?.type === "favor");
   const selectedCard = game.hand.find((card) => card.id === selected.at(-1));
+  const reactionMs = Math.max(
+    0,
+    snapshot.pause?.remainingNopeMs ??
+      (game.reaction ? game.reaction.deadline - now : 0),
+  );
   return (
     <>
       <h1 className="sr-only">Bàn chơi Mèo Nổ</h1>
@@ -285,6 +256,7 @@ export function GameTable({
               data-player-id={member.id}
               className={
                 "player-seat" +
+                (member.id === me.id ? " is-self" : "") +
                 (member.id === game.turn.playerId && phase.kind !== "finished"
                   ? " is-turn"
                   : "") +
@@ -348,6 +320,7 @@ export function GameTable({
           <div className="table-piles">
             <div className="pile">
               <div className="deck-back" aria-hidden="true">
+                <CatMark />
                 <span>
                   Mèo
                   <br />
@@ -404,14 +377,7 @@ export function GameTable({
           <div>
             <strong>
               {snapshot.pause ? "Nope tạm dừng" : "Chờ Nope"} ·{" "}
-              {Math.max(
-                0,
-                Math.ceil(
-                  (snapshot.pause?.remainingNopeMs ??
-                    game.reaction.deadline - now) / 1000,
-                ),
-              )}{" "}
-              giây
+              {Math.ceil(reactionMs / 1000)} giây
             </strong>
             <p>
               {phase.kind === "reaction" &&
@@ -467,6 +433,23 @@ export function GameTable({
             >
               Bỏ qua
             </button>
+          </div>
+          <div
+            className="reaction-timer"
+            role="progressbar"
+            aria-label="Thời gian phản ứng Nope"
+            aria-valuemin={0}
+            aria-valuemax={NOPE_WINDOW_MS / 1000}
+            aria-valuenow={Math.min(
+              NOPE_WINDOW_MS / 1000,
+              Math.ceil(reactionMs / 1000),
+            )}
+          >
+            <span
+              style={{
+                width: Math.min(1, reactionMs / NOPE_WINDOW_MS) * 100 + "%",
+              }}
+            />
           </div>
         </section>
       )}
@@ -533,7 +516,7 @@ export function GameTable({
       <section className="hand-panel table-hand" aria-label="Tay bài của bạn">
         <div className="panel-heading">
           <h2>Tay bài của bạn</h2>
-          <span>{game.hand.length} lá</span>
+          <span>{game.hand.length} lá · Chỉ bạn thấy</span>
         </div>
         {!me.alive && <p className="connection-note">Bạn đã bị loại.</p>}
         {phase.kind === "finished" && (

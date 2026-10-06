@@ -4,6 +4,12 @@ Game web tiếng Việt đang xây theo từng phase. Engine dựa trên luật 
 
 [Kế hoạch gốc](meo-no-implementation-plan.md) · [Lộ trình](documents/README.md) · [Kết quả thực tế](documents/PROGRESS.md)
 
+## Giao diện
+
+UI theo hướng **Playful paper**: nền kem, xanh rừng–cam, logo mèo và typography bo tròn. Trang tạo/vào phòng có form rõ ràng và hướng dẫn mời bằng link; phòng chờ tách danh sách người chơi, ghế trống và khu vực mời bạn. Bàn oval giữ bố trí cũ, làm mới mặt bàn, tay bài, trạng thái chọn và các panel riêng; thanh thời gian Nope dừng theo thời gian server giữ khi ván pause. Luật, payload bài kín và cơ chế reconnect không đổi.
+
+Hướng thiết kế tham khảo [Envato: UX/UI trends 2026](https://elements.envato.com/learn/ux-ui-design-trends) và [WANDR: Game UI trends 2026](https://www.wandr.studio/blog/game-ui-design-trends-2026): phân cấp rõ, giảm nhiễu, chuyển động phản hồi có mục đích và bố cục riêng cho mobile. Font **Baloo 2** và **Be Vietnam Pro** được đóng gói local trong `src/assets/fonts/`, kèm giấy phép SIL OFL; không phụ thuộc request Google Fonts khi chơi. Logo và mặt bài dùng chung ở `src/Brand.tsx` và `src/CardFace.tsx`; màu và typography tập trung trong CSS variables.
+
 ## Chạy local
 
 Yêu cầu Node.js **22.12 trở lên** và npm. Đã kiểm tra trên Windows với Node 22.14.0, npm 10.9.2. Không cần tài khoản Cloudflare, API token hay file `.env` để chạy local.
