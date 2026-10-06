@@ -477,9 +477,58 @@ for (const finishes of [false, true]) {
           await expect(
             page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
           ).toContainText("Thảo đã nổ và bị loại!");
+          const eliminatedSeat = page.locator(
+            '[data-player-id="' + sessions[0].playerId + '"]',
+          );
+          await expect(eliminatedSeat).toContainText("Đã nổ · Bị loại");
+          await expect(eliminatedSeat).toHaveCSS(
+            "background-color",
+            "rgb(36, 36, 36)",
+          );
+          await expect(eliminatedSeat).toHaveCSS("box-shadow", "none");
+          await expect(eliminatedSeat.locator(".player-avatar")).toHaveCSS(
+            "background-color",
+            "rgb(56, 56, 56)",
+          );
+          await expect(eliminatedSeat.locator("strong")).toHaveCSS(
+            "color",
+            "rgb(194, 194, 194)",
+          );
+          await expect(eliminatedSeat.locator("small")).toHaveCSS(
+            "color",
+            "rgb(164, 164, 164)",
+          );
+          const survivorSeat = page.locator(
+            '[data-player-id="' + sessions[1].playerId + '"]',
+          );
+          await expect(page.locator(".player-seat.is-winner")).toHaveCount(
+            finishes ? 1 : 0,
+          );
           await expect(
-            page.locator('[data-player-id="' + sessions[0].playerId + '"]'),
-          ).toContainText("Đã nổ · Bị loại");
+            page.getByRole("img", { name: "Vương miện người thắng" }),
+          ).toHaveCount(finishes ? 1 : 0);
+          if (finishes) {
+            await expect(survivorSeat).toHaveClass(/is-winner/);
+            await expect(survivorSeat).toHaveCSS(
+              "background-color",
+              "rgb(255, 243, 203)",
+            );
+            await expect(survivorSeat.locator(".player-avatar")).toHaveCSS(
+              "background-color",
+              "rgb(232, 199, 95)",
+            );
+            await expect(survivorSeat.locator(".winner-tag")).toHaveText(
+              "Người thắng",
+            );
+            await expect(
+              survivorSeat.getByRole("img", { name: "Vương miện người thắng" }),
+            ).toBeVisible();
+          } else {
+            await expect(survivorSeat).toHaveCSS(
+              "background-color",
+              "rgb(255, 253, 247)",
+            );
+          }
           await expect(
             page.getByRole("region", { name: "Cài bom kín" }),
           ).toHaveCount(0);
@@ -519,6 +568,12 @@ for (const finishes of [false, true]) {
           await expect(
             page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
           ).toContainText("Thảo đã nổ và bị loại!");
+          await expect(page.locator(".player-seat.is-winner")).toHaveCount(
+            finishes ? 1 : 0,
+          );
+          await expect(
+            page.getByRole("img", { name: "Vương miện người thắng" }),
+          ).toHaveCount(finishes ? 1 : 0);
         }
         await pages[0].screenshot({
           path: testInfo.outputPath("bomb-exploded-desktop.png"),
@@ -532,6 +587,28 @@ for (const finishes of [false, true]) {
               () => document.documentElement.scrollWidth <= innerWidth,
             ),
           ).toBe(true);
+          await expect(
+            pages[1].locator('[data-player-id="' + sessions[0].playerId + '"]'),
+          ).toHaveCSS("background-color", "rgb(36, 36, 36)");
+          if (finishes) {
+            const crown = pages[1].getByRole("img", {
+              name: "Vương miện người thắng",
+            });
+            await expect(crown).toBeInViewport();
+            const overlapsAnnouncement = await crown.evaluate((crown) => {
+              const icon = crown.getBoundingClientRect();
+              const announcement = document
+                .querySelector(".play-announcement")!
+                .getBoundingClientRect();
+              return (
+                icon.left < announcement.right &&
+                icon.right > announcement.left &&
+                icon.top < announcement.bottom &&
+                icon.bottom > announcement.top
+              );
+            });
+            expect(overlapsAnnouncement).toBe(false);
+          }
           await pages[1].screenshot({
             path: testInfo.outputPath("bomb-exploded-mobile-" + width + ".png"),
             fullPage: true,
@@ -1542,6 +1619,14 @@ test("chủ rời giữ ghế và chuyển quyền, hủy/tái đấu rồi chơ
       .poll(async () => (await view(pages[1])).game!.drawCount)
       .toBe(47);
     expect((await view(pages[1])).gameId).not.toBe(nextId);
+    for (const page of pages) {
+      await expect(
+        page.getByRole("img", { name: "Vương miện người thắng" }),
+      ).toHaveCount(0);
+      await expect(
+        page.locator(".player-seat.is-winner, .player-seat.is-eliminated"),
+      ).toHaveCount(0);
+    }
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

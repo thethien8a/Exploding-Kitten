@@ -897,16 +897,56 @@ form > button {
   margin-top: 4px;
   font-weight: 700;
 }
-.is-offline .player-avatar,
-.is-eliminated .player-avatar {
+.is-offline .player-avatar {
   background: #dadfd2;
   color: var(--muted);
 }
 .is-offline small {
   color: #99512d;
 }
-.is-eliminated strong {
-  color: var(--muted);
+.player-seat.is-eliminated {
+  background: #242424;
+  border-color: #454545;
+  box-shadow: none;
+}
+.player-seat.is-eliminated .player-avatar {
+  background: #383838;
+  color: #aaa;
+}
+.player-seat.is-eliminated strong {
+  color: #c2c2c2;
+}
+.player-seat.is-eliminated small {
+  color: #a4a4a4;
+}
+.player-seat.is-winner {
+  background: #fff3cb;
+  border-color: #c99a31;
+  box-shadow: 0 0 0 3px #e6bf5430;
+}
+.player-seat.is-winner .player-avatar {
+  background: #e8c75f;
+  color: #5e4314;
+}
+.winner-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #f8df92;
+  color: #694b16;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.winner-crown {
+  position: absolute;
+  top: 8px;
+  right: -11px;
+  width: 24px;
+  height: 24px;
+  fill: #f3c959;
+  stroke: #845f20;
 }
 .table-center {
   position: absolute;

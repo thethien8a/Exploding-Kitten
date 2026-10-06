@@ -23,7 +23,7 @@ Mở <http://127.0.0.1:5173/>. Nhập tên, chọn **3/4/5 người**, bấm **T
 
 Khi bắt đầu, mọi người tự chuyển từ phòng chờ sang **bàn oval riêng**: chồng rút/bài bỏ ở giữa, các ghế xung quanh, ghế của bạn ở dưới và tay bài riêng bên dưới bàn. Lá vừa đánh, cả combo 2/3 lá và Nope, hiện công khai kèm tên người đánh; Xin Bài và combo ghi rõ “nhắm vào” tên người được chọn. Có hiệu ứng đưa bài ra giữa bàn và hỗ trợ giảm chuyển động. URL phòng và kết nối giữ nguyên, không reload hoặc tạo phòng mới. Tay bài trên điện thoại cuộn ngang để xem đủ các lá.
 
-Khi ai rút trúng Mèo Nổ, cả bàn thấy tên người đó và trạng thái **đang gỡ bom**, **đã gỡ bom an toàn** hoặc **đã nổ và bị loại**. Ghế đang gỡ được đánh dấu; ghế bị loại tiếp tục hiện trạng thái đã nổ. Thông báo không lộ vị trí cài lại hoặc tay bài.
+Khi ai rút trúng Mèo Nổ, cả bàn thấy tên người đó và trạng thái **đang gỡ bom**, **đã gỡ bom an toàn** hoặc **đã nổ và bị loại**. Ghế đang gỡ được đánh dấu; ghế bị loại chuyển sang tông đen/xám, giữ tên và trạng thái đã nổ dễ đọc. Khi ván kết thúc, người thắng có vương miện, viền vàng và nhãn **Người thắng**; dấu hiệu bị loại/thắng không giữ sang ván mới. Thông báo không lộ vị trí cài lại hoặc tay bài.
 
 Để mô phỏng ba người trên một máy, dùng Chrome thường, Chrome ẩn danh và Edge, hoặc các profile riêng. **Tab mới trong cùng profile sẽ lấy lại cùng ghế và thay tab cũ**, không tạo thêm người. Phiên bí mật nằm trong localStorage theo phòng; link mời không chứa token. Xóa dữ liệu trình duyệt hoặc đổi thiết bị không lấy lại ghế bằng tên.
 

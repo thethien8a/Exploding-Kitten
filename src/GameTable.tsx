@@ -257,6 +257,9 @@ export function GameTable({
               className={
                 "player-seat" +
                 (member.id === me.id ? " is-self" : "") +
+                (phase.kind === "finished" && member.id === phase.winnerId
+                  ? " is-winner"
+                  : "") +
                 (member.id === game.turn.playerId && phase.kind !== "finished"
                   ? " is-turn"
                   : "") +
@@ -298,6 +301,22 @@ export function GameTable({
                       ? "Đã nổ · Bị loại"
                       : member.cardCount + " lá"}
                 </small>
+                {phase.kind === "finished" && member.id === phase.winnerId && (
+                  <span className="winner-tag">
+                    <svg
+                      className="winner-crown"
+                      viewBox="0 0 32 32"
+                      role="img"
+                      aria-label="Vương miện người thắng"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m4 9 6 5 6-9 6 9 6-5-3 15H7ZM8 28h16" />
+                    </svg>
+                    Người thắng
+                  </span>
+                )}
                 {member.id === game.turn.playerId &&
                   phase.kind !== "finished" && (
                     <span className="turn-tag">
