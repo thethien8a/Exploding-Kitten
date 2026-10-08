@@ -327,24 +327,35 @@ describe("lượt, Attack và Skip", () => {
     expect(result.drawPile).toEqual(game.drawPile);
   });
 
-  test("Attack nối nhau chuyển lần lượt 2, 4, 6 lượt", () => {
+  test("Attack nối nhau luôn chuyển đúng 2 lượt, không cộng dồn", () => {
     let game = fixture(
       [["attack"], ["attack", "skip"], ["attack", "favor", "nope"]],
-      ["beard_cat"],
+      ["beard_cat", "tacocat"],
     );
     for (const expected of [
       { playerId: "binh", remaining: 2, attacked: true },
-      { playerId: "chi", remaining: 4, attacked: true },
-      { playerId: "an", remaining: 6, attacked: true },
+      { playerId: "chi", remaining: 2, attacked: true },
+      { playerId: "an", remaining: 2, attacked: true },
     ]) {
       game = settle(play(game, "attack"));
       expect(game.turn).toEqual(expected);
-      expect(game.drawPile.map((card) => card.type)).toEqual(["beard_cat"]);
+      expect(game.drawPile.map((card) => card.type)).toEqual([
+        "beard_cat",
+        "tacocat",
+      ]);
     }
+    game = move(game, { type: "draw", playerId: "an" });
+    expect(game.turn).toEqual({ playerId: "an", remaining: 1, attacked: true });
+    game = move(game, { type: "draw", playerId: "an" });
+    expect(game.turn).toEqual({
+      playerId: "binh",
+      remaining: 1,
+      attacked: false,
+    });
   });
 
   test.each(["draw", "skip"] as const)(
-    "Attack sau khi %s một lượt nợ chuyển 1 + 2 = 3, không phải 2 hoặc 4",
+    "Attack sau khi %s một lượt nợ vẫn chỉ chuyển 2 lượt",
     (method) => {
       let game = fixture(
         [["attack"], ["attack", "skip"], ["favor", "nope"]],
@@ -363,11 +374,33 @@ describe("lượt, Attack và Skip", () => {
       game = settle(play(game, "attack"));
       expect(game.turn).toEqual({
         playerId: "chi",
-        remaining: 3,
+        remaining: 2,
         attacked: true,
       });
     },
   );
+
+  test("Nope chặn Attack phản công giữ nguyên 2 lượt của người đang bị Attack", () => {
+    let game = fixture(
+      [["attack"], ["attack"], ["nope"]],
+      ["beard_cat", "tacocat"],
+    );
+    game = settle(play(game, "attack"));
+    const turn = { ...game.turn };
+    game = play(game, "attack");
+    game = move(game, {
+      type: "nope",
+      playerId: "chi",
+      cardId: game.players[2].hand[0].id,
+    });
+    game = settle(game);
+    expect(game.turn).toEqual(turn);
+    expect(game.discardPile.map((card) => card.type)).toEqual([
+      "attack",
+      "attack",
+      "nope",
+    ]);
+  });
 
   test("trả hết nợ rồi Attack ở vòng sau chỉ chuyển 2 lượt", () => {
     let game = fixture(
@@ -481,7 +514,7 @@ describe("Mèo Nổ và Gỡ Bom", () => {
     },
   );
 
-  test("Gỡ Bom dưới Attack trả một lượt, giữ lượt nợ cuối để chuyển tiếp 3", () => {
+  test("Gỡ Bom dưới Attack trả một lượt, Attack tiếp chỉ chuyển 2 lượt", () => {
     let game = fixture(
       [["defuse", "attack"], ["nope"], ["skip", "favor"]],
       ["exploding_kitten", "beard_cat"],
@@ -493,7 +526,7 @@ describe("Mèo Nổ và Gỡ Bom", () => {
     game = settle(play(game, "attack"));
     expect(game.turn).toEqual({
       playerId: "binh",
-      remaining: 3,
+      remaining: 2,
       attacked: true,
     });
   });
@@ -782,6 +815,235 @@ describe("combo cùng tên, không tác dụng riêng", () => {
   );
 });
 
+describe("combo 5 loại đổi bài bỏ ngay, không thể Nope", () => {
+  test("lấy lại bài mình đã đánh, trả cả Gỡ Bom/Nope và giữ nguyên nợ lượt", () => {
+    let game = fixture(
+      [
+        [
+          "shuffle",
+          "defuse",
+          "nope",
+          "attack",
+          "skip",
+          "see_future",
+          "tacocat",
+        ],
+        ["nope"],
+        ["favor"],
+      ],
+      ["beard_cat", "exploding_kitten", "defuse"],
+    );
+    game.turn = { playerId: "an", remaining: 2, attacked: true };
+    game = settle(play(game, "shuffle"), () => 0.9999);
+    const costs = game.players[0].hand.slice(0, 5).reverse();
+    const result = move(game, {
+      type: "play",
+      playerId: "an",
+      cardIds: costs.map((card) => card.id),
+      discardIndex: 0,
+    });
+    expect(result.players[0].hand).toEqual([
+      game.players[0].hand[5],
+      game.discardPile[0],
+    ]);
+    expect(result.players.slice(1)).toEqual(game.players.slice(1));
+    expect(result.discardPile).toEqual(costs);
+    expect(result.drawPile).toEqual(game.drawPile);
+    expect(result.turn).toEqual(game.turn);
+    expect(result.phase).toEqual({ kind: "turn" });
+    expect(getFutureCards(result, "an")).toEqual([]);
+    const before = structuredClone(result);
+    expect(() =>
+      applyCommand(result, {
+        type: "nope",
+        playerId: "binh",
+        cardId: game.players[1].hand[0].id,
+      }),
+    ).toThrow("NO_REACTION");
+    expect(() => resolveReaction(result, () => 0)).toThrow("NO_REACTION");
+    expect(result).toEqual(before);
+  });
+
+  test.each(["favor", "tacocat", "exploding_kitten"] as const)(
+    "lấy %s do người khác bỏ khi nổ, kể cả chính lá bom",
+    (type) => {
+      let game = fixture(
+        [
+          ["defuse", "nope", "attack", "shuffle", "see_future", "skip"],
+          ["favor", "tacocat"],
+          ["nope"],
+        ],
+        ["exploding_kitten", "beard_cat", "cattermelon"],
+      );
+      game.turn.playerId = "binh";
+      game = move(game, { type: "draw", playerId: "binh" });
+      game = move(game, { type: "draw", playerId: "chi" });
+      const discardIndex = game.discardPile.findIndex(
+        (card) => card.type === type,
+      );
+      const result = move(game, {
+        type: "play",
+        playerId: "an",
+        cardIds: game.players[0].hand.slice(0, 5).map((card) => card.id),
+        discardIndex,
+      });
+      expect(result.players[0].hand).toEqual([
+        game.players[0].hand[5],
+        game.discardPile[discardIndex],
+      ]);
+      expect(result.players.slice(1)).toEqual(game.players.slice(1));
+      expect(result.discardPile).toEqual([
+        ...game.discardPile.filter((_, index) => index !== discardIndex),
+        ...game.players[0].hand.slice(0, 5),
+      ]);
+      expect(result.turn).toEqual(game.turn);
+      expect(result.drawPile).toEqual(game.drawPile);
+      expect(result.phase).toEqual({ kind: "turn" });
+    },
+  );
+
+  test("phải sở hữu 5 ID duy nhất và 5 loại khác nhau, lỗi không tiêu bài", () => {
+    const game = fixture(
+      [
+        ["attack", "skip", "nope", "defuse", "skip", "see_future"],
+        ["favor"],
+        ["tacocat"],
+      ],
+      ["beard_cat"],
+    );
+    game.discardPile.push(...game.drawPile.splice(0));
+    const ids = game.players[0].hand.map((card) => card.id);
+    for (const [cardIds, error] of [
+      [ids.slice(0, 5), "COMBO_MUST_DIFFER"],
+      [[ids[0], ids[1], ids[2], ids[3], ids[3]], "DUPLICATE_CARD"],
+      [
+        [ids[0], ids[1], ids[2], ids[3], game.players[1].hand[0].id],
+        "CARD_NOT_IN_HAND",
+      ],
+      [[ids[0], ids[1], ids[2], ids[3], "missing"], "CARD_NOT_IN_HAND"],
+    ] as [string[], string][]) {
+      const before = structuredClone(game);
+      expect(() =>
+        applyCommand(game, {
+          type: "play",
+          playerId: "an",
+          cardIds,
+          discardIndex: 0,
+        }),
+      ).toThrow(error);
+      expect(game).toEqual(before);
+      expect(inventory(game)).toEqual(inventory(before));
+    }
+  });
+
+  test.each([
+    undefined,
+    -1,
+    0.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    2,
+  ])(
+    "từ chối lựa chọn bài bỏ thiếu/sai %s trước khi trả bài",
+    (discardIndex) => {
+      const game = fixture(
+        [
+          ["attack", "skip", "nope", "defuse", "see_future"],
+          ["favor"],
+          ["tacocat"],
+        ],
+        ["beard_cat", "cattermelon"],
+      );
+      game.discardPile.push(...game.drawPile.splice(0));
+      const before = structuredClone(game);
+      expect(() =>
+        applyCommand(game, {
+          type: "play",
+          playerId: "an",
+          cardIds: game.players[0].hand.map((card) => card.id),
+          ...(discardIndex === undefined ? {} : { discardIndex }),
+        }),
+      ).toThrow(
+        discardIndex === undefined
+          ? "DISCARD_INDEX_REQUIRED"
+          : "INVALID_DISCARD_INDEX",
+      );
+      expect(game).toEqual(before);
+    },
+  );
+
+  test.each([0, 1])(
+    "chồng có %i lá: không được chọn lá sắp trả làm mục tiêu",
+    (discardCount) => {
+      const game = fixture(
+        [
+          ["attack", "skip", "nope", "defuse", "see_future"],
+          ["favor"],
+          ["tacocat"],
+        ],
+        ["beard_cat", "cattermelon"],
+      );
+      game.discardPile.push(...game.drawPile.splice(0, discardCount));
+      const before = structuredClone(game);
+      expect(() =>
+        applyCommand(game, {
+          type: "play",
+          playerId: "an",
+          cardIds: game.players[0].hand.map((card) => card.id),
+          discardIndex: discardCount,
+        }),
+      ).toThrow("INVALID_DISCARD_INDEX");
+      expect(game).toEqual(before);
+    },
+  );
+
+  test("combo 5 vẫn cần đúng lượt, còn sống và không có thao tác chờ", () => {
+    const game = fixture(
+      [
+        ["attack", "skip", "nope", "defuse", "see_future"],
+        ["favor"],
+        ["tacocat"],
+      ],
+      ["beard_cat"],
+    );
+    game.discardPile.push(...game.drawPile.splice(0));
+    const command: GameCommand = {
+      type: "play",
+      playerId: "an",
+      cardIds: game.players[0].hand.map((card) => card.id),
+      discardIndex: 0,
+    };
+    const otherTurn = structuredClone(game);
+    otherTurn.turn.playerId = "binh";
+    const pending = structuredClone(game);
+    pending.phase = { kind: "future", playerId: "an" };
+    const eliminated = structuredClone(otherTurn);
+    eliminated.players[0].alive = false;
+    eliminated.discardPile.push(...eliminated.players[0].hand.splice(0));
+    for (const [state, error] of [
+      [otherTurn, "NOT_YOUR_TURN"],
+      [pending, "ACTION_PENDING"],
+      [eliminated, "PLAYER_NOT_ALIVE"],
+    ] as [GameState, string][]) {
+      const before = structuredClone(state);
+      expect(() => applyCommand(state, command)).toThrow(error);
+      expect(state).toEqual(before);
+    }
+    for (const options of [
+      { targetId: "binh" },
+      { requestedType: "defuse" as const },
+    ]) {
+      expect(() => applyCommand(game, { ...command, ...options })).toThrow(
+        "INVALID_COMMAND",
+      );
+    }
+    expect(() =>
+      applyCommand(game, { ...command, cardIds: [command.cardIds[0]] }),
+    ).toThrow("INVALID_COMMAND");
+  });
+});
+
 describe("Nope trước khi action bắt đầu", () => {
   test.each([0, 1, 2, 3, 4, 5])(
     "%i Nope: parity chốt Skip, bài đã đánh không quay lại",
@@ -992,7 +1254,7 @@ describe("lệnh sai không làm đổi trạng thái", () => {
     }
   });
 
-  test("combo sai, target sai, lá không sở hữu và không có combo 5", () => {
+  test("combo sai, target sai, lá không sở hữu và số lá không hợp lệ", () => {
     const game = fixture(
       [
         ["skip", "attack", "favor", "tacocat", "tacocat", "tacocat"],
@@ -1005,7 +1267,8 @@ describe("lệnh sai không làm đổi trạng thái", () => {
     const ids = game.players[0].hand.map((card) => card.id);
     for (const [selection, extras, error] of [
       [[], {}, "INVALID_CARD_COUNT"],
-      [ids.slice(0, 5), { targetId: "binh" }, "INVALID_CARD_COUNT"],
+      [ids.slice(0, 4), { targetId: "binh" }, "INVALID_CARD_COUNT"],
+      [ids, { targetId: "binh" }, "INVALID_CARD_COUNT"],
       [[ids[0], ids[0]], { targetId: "binh" }, "DUPLICATE_CARD"],
       [ids.slice(0, 2), { targetId: "binh" }, "COMBO_MUST_MATCH"],
       [[game.players[1].hand[0].id], {}, "CARD_NOT_IN_HAND"],

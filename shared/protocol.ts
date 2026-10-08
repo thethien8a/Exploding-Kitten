@@ -133,6 +133,13 @@ const ERRORS: Record<string, string> = {
   NOT_YOUR_TURN: "Chưa tới lượt của bạn.",
   ACTION_PENDING: "Cần hoàn tất thao tác đang chờ.",
   CARD_NOT_IN_HAND: "Bạn không sở hữu lá bài này.",
+  INVALID_CARD_COUNT: "Chỉ được đánh 1, 2, 3 hoặc 5 lá bài.",
+  DUPLICATE_CARD: "Mỗi lá bài chỉ được chọn một lần.",
+  COMBO_MUST_DIFFER: "Combo 5 lá cần 5 loại bài khác nhau.",
+  DISCARD_INDEX_REQUIRED:
+    "Hãy chọn một lá đã có trong chồng bài bỏ để đổi combo 5 lá.",
+  INVALID_DISCARD_INDEX:
+    "Lá bài bỏ được chọn không hợp lệ hoặc không còn trong chồng.",
   PLAYER_NOT_ALIVE: "Bạn đã bị loại; vẫn có thể xem bàn chơi.",
   RATE_LIMITED: "Thao tác quá nhanh. Hãy chờ một chút.",
   GAME_NOT_STARTED: "Ván chưa bắt đầu.",

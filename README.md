@@ -25,6 +25,8 @@ Khi bắt đầu, mọi người tự chuyển từ phòng chờ sang **bàn ova
 
 Sau khi combo 2/3 lá được chốt, **chỉ người lấy và người bị lấy** nhận thông báo tên lá đã chuyển, hoặc kết quả không lấy được bài. Thông báo có nút đóng, giữ qua reconnect/restart và không mở lại khi nhận cùng ID trong phiên đang mở. Người thứ ba và API công khai không nhận thông tin này; combo bị Nope chặn không báo đã lấy bài.
 
+**Combo 5 lá khác loại:** chọn 5 lá có tên khác nhau trên tay, chọn **Lá bài bỏ muốn lấy** từ chồng bài bỏ chung rồi bấm **Đánh 5 lá đã chọn**. Bạn lấy đúng 1 lá đã có trong bài bỏ trước khi đổi, không lấy lại một trong 5 lá vừa trả. Combo này xử lý ngay, **không thể Nope** và **không kết thúc lượt**. Gỡ Bom/Nope có thể là một trong 5 loại và không kích hoạt tác dụng riêng khi dùng trong combo.
+
 Khi ai rút trúng Mèo Nổ, cả bàn thấy tên người đó và trạng thái **đang gỡ bom**, **đã gỡ bom an toàn** hoặc **đã nổ và bị loại**. Ghế đang gỡ được đánh dấu; ghế bị loại chuyển sang tông đen/xám, giữ tên và trạng thái đã nổ dễ đọc. Khi ván kết thúc, người thắng có vương miện, viền vàng và nhãn **Người thắng**; dấu hiệu bị loại/thắng không giữ sang ván mới. Thông báo không lộ vị trí cài lại hoặc tay bài.
 
 Để mô phỏng ba người trên một máy, dùng Chrome thường, Chrome ẩn danh và Edge, hoặc các profile riêng. **Tab mới trong cùng profile sẽ lấy lại cùng ghế và thay tab cũ**, không tạo thêm người. Phiên bí mật nằm trong localStorage theo phòng; link mời không chứa token. Xóa dữ liệu trình duyệt hoặc đổi thiết bị không lấy lại ghế bằng tên.
@@ -60,9 +62,10 @@ Dữ liệu local mặc định nằm trong `.wrangler/state/v3/`, không nằm 
 
 Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong khoảng từ 0 (bao gồm) đến 1 (không bao gồm). Không cho client truyền seed/kết quả random. Các lỗi luật là `Error` có thông điệp mã như `NOT_YOUR_TURN`, `ACTION_PENDING`, `INVALID_BOMB_POSITION`; adapter sau này dịch thành thông báo tiếng Việt.
 
-- Bài đánh vào discard ngay; tác dụng chỉ bắt đầu sau `resolveReaction`. Nope chỉ được dùng trong `reaction`, có thể chặn Nope hoặc combo, không chặn rút bom/Gỡ Bom.
+- Bài tác dụng và combo 2/3 lá đánh vào discard ngay; tác dụng chỉ bắt đầu sau `resolveReaction`. Nope chỉ được dùng trong `reaction`, có thể chặn Nope hoặc combo 2/3, không chặn rút bom/Gỡ Bom hay combo 5 lá.
+- Combo 5 lá yêu cầu 5 ID trên tay thuộc 5 loại khác nhau và `discardIndex` trỏ tới một lá đã có trong bài bỏ. Server lấy lá đó rồi bỏ 5 lá trả cùng một thao tác, giữ nguyên lượt/chồng rút và không tạo reaction. Index được kiểm tra cùng phiên bản bàn để không lấy nhầm sau thay đổi; gửi lại cùng ID lệnh không đổi bài lần nữa.
 - Không được Nope lá/combo hoặc Nope mình vừa đánh; người đánh ban đầu vẫn được phản Nope của người khác. Engine kiểm tra người đánh gần nhất trước khi tiêu lá; UI khóa nút và giải thích lý do.
-- `turn.attacked` phân biệt lượt thường với lượt nợ cuối của Attack: Skip/rút/Gỡ Bom chỉ trả một lượt; Attack khi còn nợ chuyển số lượt còn lại + 2.
+- `turn.attacked` phân biệt lượt thường với lượt nợ cuối của Attack: Skip/rút/Gỡ Bom chỉ trả một lượt. Theo luật tùy chỉnh, Attack kết thúc toàn bộ lượt còn lại của người đánh và người kế tiếp luôn có đúng 2 lượt, không cộng dồn.
 - `favor` chờ người cho chọn lá; `future` chờ người xem đóng; `defuse` giữ bom công khai đang xử lý, chờ người rút cài lại ở vị trí 0..N rồi mới kết thúc một lượt. Không có đồng hồ suy nghĩ trong engine.
 - Gỡ Bom dư được trộn **trước khi chia 7 lá**, đúng bước 3–4 PDF 2022: mỗi người có ít nhất một Gỡ Bom, có thể có thêm. Tay khởi đầu vẫn là 8 lá/người; số bom vẫn bằng số người trừ một.
 - Số bài tăng từ bộ gốc 3 người theo công thức: mỗi ghế trên 3 thêm **một lá mỗi loại trong 11 loại thường**, sau khi chia. Không thêm bom/Gỡ Bom và không đặt bảng số lượng riêng cho từng cỡ nhóm. Chồng rút lúc bắt đầu với 3/4/5 người là **29/34/38**; tổng số lá đang dùng (tay bài + chồng rút) là **53/66/78**. Mỗi người vẫn được chia 8 lá; các lá loại khỏi thiết lập không được rút. Cần bắt đầu ván mới để nhận chính sách này; ván dài 80 lá đã lưu vẫn khôi phục nguyên trạng, không cắt bài hoặc xáo lại.
@@ -117,20 +120,21 @@ npx playwright install chromium
 npm test
 ```
 
-`npm run test:engine` chạy Vitest cho engine và lớp phòng, không cần Chrome, tài khoản Cloudflare hoặc server. **185 test** gồm 96 test luật (có 36 ván tới thắng) và 89 test phòng: quyền/validation, projection, chống trùng, deadline sát biên, pause/recovery, heartbeat, migration, chuyển chủ, hủy/tái đấu, TTL, metadata bài vừa đánh/mục tiêu/bom, kết quả combo riêng tư, biên cài ngẫu nhiên, inventory theo số người và phân biệt tự Nope/phản Nope.
+`npm run test:engine` chạy Vitest cho engine và lớp phòng, không cần Chrome, tài khoản Cloudflare hoặc server. **241 test** gồm 112 test luật (có 36 ván tới thắng) và 129 test phòng: quyền/validation, projection, chống trùng, deadline sát biên, pause/recovery, heartbeat, migration, chuyển chủ, hủy/tái đấu, TTL, metadata bài vừa đánh/mục tiêu/bom, kết quả combo riêng tư, combo 5 loại đổi bài bỏ không Nope, biên cài ngẫu nhiên, inventory theo số người và phân biệt tự Nope/phản Nope.
 
-`npm test` chạy Vitest, rồi build và chạy Playwright. `npm run test:e2e` chỉ chạy phần build/Playwright, khởi tạo runtime Cloudflare local trên cổng **8788**. **30 kịch bản** gồm 7 hồi quy multiplayer và 23 recovery/bàn chơi:
+`npm test` chạy Vitest, rồi build và chạy Playwright. `npm run test:e2e` chỉ chạy phần build/Playwright, khởi tạo runtime Cloudflare local trên cổng **8788**. **32 kịch bản** gồm 7 hồi quy multiplayer và 25 recovery/bàn chơi:
 
 - 3/4/5 browser context độc lập tạo/vào phòng qua UI, ready/start, chuyển sang bàn chơi, nhận 8 lá riêng; ghế của mỗi người ở dưới, không chồng ghế lên deck ở 1280/390/320px; phòng khác không bị thay đổi.
 - Kiểm tra payload mạng không có tay người khác, deck/token; gửi hai lệnh rút cùng ID và lệnh thứ ba cùng phiên bản chỉ rút một lần.
 - Tab thay thế, token bị kick vô hiệu, ID lệnh theo ghế, ACK cũ ổn định, chuyển chủ phòng khi rời lobby.
 - Origin/token/method sai, JSON/binary/quá dài/giả `playerId` và rate limit không làm đổi ván.
 - Alarm runtime 5 giây chốt action; rút/Gỡ Bom tới loại một người, kiểm tra payload spectator.
-- UI mobile Nope/future/favor/defuse/combo bằng fixture snapshot **chỉ để kiểm tra render và lệnh UI**; kiểm tra tên bài dài nằm trong thẻ và cuộn được đến lá cuối. Không coi fixture là bằng chứng server xử lý luật. Luật mạng được kiểm tra bằng runtime thật và Vitest riêng.
+- UI mobile Nope/future/favor/defuse/combo bằng fixture snapshot **chỉ để kiểm tra render và lệnh UI**; kiểm tra tên bài dài nằm trong thẻ và cuộn được đến lá cuối; nút Rút bài bên trái, Đánh lá đã chọn bên phải ở 1280/390/320px. Không coi fixture là bằng chứng server xử lý luật. Luật mạng được kiểm tra bằng runtime thật và Vitest riêng.
 - Mọi ghế thấy người dính bom, gỡ thành công hoặc nổ/bị loại, cả khi đó là lần nổ kết thúc ván; người bị loại chỉ xem công khai. Cài ngẫu nhiên không gửi trước xác nhận, không lộ vị trí và không cài lần nữa khi replay sau restart SQLite.
 - UI đánh combo 2/3 lá rồi Nope qua Worker thật: mọi ghế nhận đúng bài/người đánh/mục tiêu, hiệu ứng có giảm chuyển động và không phát lại khi reconnect. Xin Bài giữ thông báo mục tiêu sau restart; không lộ lá được trao và không gắn mục tiêu cũ vào Nope.
 - Tay bài cùng loại nằm cạnh nhau; chọn theo ID vẫn đánh/cho đúng lá. Combo 2/3 thành công hoặc không có lá gọi tên báo đúng kết quả cho hai bên, không lộ cho người thứ ba/API công khai; đóng thông báo rồi replay/reconnect không mở lại, restart giữ kết quả.
-- Attack qua Worker thật cộng dồn 2→4→6; rút một lượt còn 5, restart rồi Attack chuyển 7 lượt cho người tiếp theo. Đây là kiểm chứng bản local, chưa tái hiện báo cáo ngoài hệ thống.
+- Combo 5 lá khác loại lấy Gỡ Bom/Mèo Nổ từ bài bỏ qua Worker thật, không mở Nope; lệnh Nope/Bỏ qua bị từ chối, 5 lá trả hiện đúng cho cả bàn, giữ lượt và kết quả qua replay/restart SQLite. UI chặn 4 lá hoặc 5 lá trùng loại, yêu cầu chọn bài bỏ và kiểm tra bố cục 1280/390/320px.
+- Attack qua Worker thật luôn chuyển đúng 2 lượt, không cộng dồn khi đánh nối tiếp; rút một lượt còn 1, restart rồi Attack vẫn chỉ chuyển 2 lượt cho người tiếp theo.
 - Rút thành công bỏ chọn toàn bộ lá cũ, cả khi còn lượt nợ hoặc gặp bom; lỗi lưu/reconnect không xóa lựa chọn, thử lại thành công mới reset. Kiểm tra trạng thái `aria-pressed`, viền chọn, panel mục tiêu và khả năng chọn bài lại.
 - UI khóa tự Nope, server từ chối lệnh gửi trực tiếp mà không tiêu bài/đổi cửa sổ; người đánh ban đầu phản Nope được. Restart SQLite giữa chuỗi Nope giữ đúng người vừa phản ứng và quyền của từng người.
 - Đóng và khởi tạo lại production preview với cùng SQLite khi đang lượt thường, Xin Bài, Xem Tương Lai, cài bom và Nope; giữ bài/lượt nợ/phần riêng, không reload trang, rồi thực hiện tiếp thao tác.

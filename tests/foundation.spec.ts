@@ -862,6 +862,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
     "defuse",
     "defuse-random",
     "combo",
+    "reclaim",
   ] as const) {
     const defusing = state === "defuse" || state === "defuse-random";
     const snapshot: RoomSnapshot = {
@@ -886,7 +887,14 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           ready: true,
           connected: true,
           alive: true,
-          cardCount: state === "combo" ? 3 : state === "future" ? 6 : 2,
+          cardCount:
+            state === "reclaim"
+              ? 7
+              : state === "combo"
+                ? 3
+                : state === "future"
+                  ? 6
+                  : 2,
         },
         {
           id: "b",
@@ -907,26 +915,39 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       ],
       game: {
         hand:
-          state === "combo"
-            ? [1, 2, 3].map((index) => ({
-                id: "cat-" + index,
-                type: "tacocat",
-              }))
-            : [
+          state === "reclaim"
+            ? [
                 { id: "defuse-a", type: "defuse" },
                 { id: "nope-a", type: "nope" },
-                ...(state === "future"
-                  ? [
-                      { id: "long-future", type: "see_future" as const },
-                      {
-                        id: "long-rainbow",
-                        type: "rainbow_ralphing_cat" as const,
-                      },
-                      { id: "long-potato", type: "hairy_potato_cat" as const },
-                      { id: "long-melon", type: "cattermelon" as const },
-                    ]
-                  : []),
-              ],
+                { id: "attack-a", type: "attack" },
+                { id: "skip-a", type: "skip" },
+                { id: "cat-a", type: "tacocat" },
+                { id: "skip-b", type: "skip" },
+                { id: "rainbow-a", type: "rainbow_ralphing_cat" },
+              ]
+            : state === "combo"
+              ? [1, 2, 3].map((index) => ({
+                  id: "cat-" + index,
+                  type: "tacocat",
+                }))
+              : [
+                  { id: "defuse-a", type: "defuse" },
+                  { id: "nope-a", type: "nope" },
+                  ...(state === "future"
+                    ? [
+                        { id: "long-future", type: "see_future" as const },
+                        {
+                          id: "long-rainbow",
+                          type: "rainbow_ralphing_cat" as const,
+                        },
+                        {
+                          id: "long-potato",
+                          type: "hairy_potato_cat" as const,
+                        },
+                        { id: "long-melon", type: "cattermelon" as const },
+                      ]
+                    : []),
+                ],
         futureCards:
           state === "future"
             ? [
@@ -936,14 +957,23 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
               ]
             : [],
         drawCount: 7,
-        discardPile: [{ id: "played-favor", type: "favor" }],
+        discardPile: [
+          { id: "played-favor", type: "favor" },
+          ...(state === "reclaim"
+            ? [
+                { id: "public-explosion-1", type: "exploding_kitten" as const },
+                { id: "discarded-skip", type: "skip" as const },
+              ]
+            : []),
+        ],
         turn: {
-          playerId: state === "combo" || defusing ? "a" : "b",
+          playerId:
+            state === "combo" || state === "reclaim" || defusing ? "a" : "b",
           remaining: 2,
           attacked: true,
         },
         phase:
-          state === "combo"
+          state === "combo" || state === "reclaim"
             ? { kind: "turn" }
             : state === "reaction"
               ? {
@@ -1001,9 +1031,15 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       await expect(
         page.getByRole("status", { name: "Trạng thái kết nối" }),
       ).toHaveText("Đã kết nối");
-      await expect(page.getByTestId("last-play")).toHaveText(
-        "Minh vừa đánh Xin Bài" + (state === "future" ? "" : " nhắm vào Thảo"),
-      );
+      if (state === "reclaim")
+        await expect(page.getByTestId("last-play")).toHaveText(
+          "Lá bỏ mới nhất · Bỏ Lượt",
+        );
+      else
+        await expect(page.getByTestId("last-play")).toHaveText(
+          "Minh vừa đánh Xin Bài" +
+            (state === "future" ? "" : " nhắm vào Thảo"),
+        );
       const warning = page.getByRole("alert", { name: "Bạn đang bị nhắm tới" });
       const marker = page.getByRole("img", { name: "Đang bị nhắm tới" });
       if (state === "reaction" || state === "favor") {
@@ -1289,6 +1325,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           name: /^Đánh \d+ lá đã chọn$/,
         });
         const draw = page.getByRole("button", { name: "Rút bài", exact: true });
+        await expect(
+          page.locator(".hand-actions .actions > button"),
+        ).toHaveText(["Rút bài", "Đánh 0 lá đã chọn"]);
         await expect(play).toBeDisabled();
         await expect(play).toHaveCSS("opacity", "0.5");
         await expect(draw).toBeEnabled();
@@ -1342,6 +1381,12 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         for (const width of [1280, 390, 320]) {
           await page.setViewportSize({ width, height: 900 });
           await page.mouse.move(0, 0);
+          const [drawBox, playBox] = await Promise.all([
+            draw.boundingBox(),
+            play.boundingBox(),
+          ]);
+          expect(drawBox!.x + drawBox!.width).toBeLessThanOrEqual(playBox!.x);
+          expect(drawBox!.y).toBe(playBox!.y);
           for (const button of [play, draw]) {
             await expect(button).toBeEnabled();
             await expect(button).toHaveCSS(
@@ -1369,6 +1414,122 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         }
         await page.setViewportSize({ width: 390, height: 844 });
         await page.mouse.move(0, 0);
+      }
+      if (state === "reclaim") {
+        const play = page.getByRole("button", {
+          name: /^Đánh \d+ lá đã chọn$/,
+        });
+        const costs = ["defuse-a", "nope-a", "attack-a", "skip-a"];
+        for (const id of costs)
+          await page.locator('.hand .card[data-card-id="' + id + '"]').click();
+        await expect(play).toHaveText("Đánh 4 lá đã chọn");
+        await expect(play).toBeDisabled();
+        await page.locator('.hand .card[data-card-id="skip-b"]').click();
+        await expect(page.locator(".card-help")).toHaveText(
+          "Combo 5 cần 5 lá khác loại. Hãy bỏ chọn lá trùng loại.",
+        );
+        await expect(page.getByLabel("Lá bài bỏ muốn lấy")).toBeDisabled();
+        await expect(play).toBeDisabled();
+        await page.locator('.hand .card[data-card-id="skip-b"]').click();
+        await page.locator('.hand .card[data-card-id="cat-a"]').click();
+        const discard = page.getByLabel("Lá bài bỏ muốn lấy");
+        await expect(discard).toBeEnabled();
+        await expect(play).toBeDisabled();
+        await expect(page.getByLabel("Mục tiêu (Xin Bài / combo)")).toHaveCount(
+          0,
+        );
+        await expect(
+          page.getByRole("region", { name: "Phản ứng Nope" }),
+        ).toHaveCount(0);
+        await expect(discard.locator("option")).toHaveText([
+          "Chọn một lá bài bỏ",
+          "Xin Bài · lá 1",
+          "Mèo Nổ · lá 2",
+          "Bỏ Lượt · lá 3",
+        ]);
+        const twoBombs = structuredClone(snapshot);
+        twoBombs.game!.discardPile.splice(2, 0, {
+          id: "public-explosion-2",
+          type: "exploding_kitten",
+        });
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          twoBombs,
+        );
+        await discard.selectOption("public-explosion-1");
+        await expect(play).toBeEnabled();
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          structuredClone(twoBombs),
+        );
+        await expect(discard).toHaveValue("public-explosion-1");
+        await expect(play).toBeEnabled();
+        const shifted = structuredClone(twoBombs);
+        shifted.game!.discardPile.splice(1, 1);
+        shifted.game!.discardPile[1].id = "public-explosion-1";
+        shifted.game!.discardPile.push({ id: "new-cost", type: "attack" });
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          shifted,
+        );
+        await expect(discard).toHaveValue("");
+        await expect(play).toBeDisabled();
+        const empty = structuredClone(snapshot);
+        empty.game!.discardPile = [];
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          empty,
+        );
+        await expect(page.getByText("Chồng bài bỏ đang trống.")).toBeVisible();
+        await expect(play).toBeDisabled();
+        await page.evaluate(
+          (next) =>
+            (
+              window as unknown as {
+                publishSnapshot: (next: RoomSnapshot) => void;
+              }
+            ).publishSnapshot(next),
+          snapshot,
+        );
+        await discard.selectOption("discarded-skip");
+        await expect(play).toBeEnabled();
+        await page.locator('.hand .card[data-card-id="rainbow-a"]').click();
+        await expect(
+          page.locator('.hand .card[aria-pressed="true"]'),
+        ).toHaveCount(5);
+        await expect(discard).toHaveValue("discarded-skip");
+        for (const width of [1280, 390, 320]) {
+          await page.setViewportSize({ width, height: 900 });
+          expect(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          ).toBe(true);
+          await page.locator(".table-hand").screenshot({
+            path: testInfo.outputPath("five-card-choice-" + width + ".png"),
+          });
+        }
+        await page.setViewportSize({ width: 390, height: 844 });
       }
       await page.screenshot({
         path: testInfo.outputPath("phase-2-ui-" + state + ".png"),
@@ -1431,6 +1592,11 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           targetId: "b",
           requestedType: "attack",
         },
+        reclaim: {
+          type: "play",
+          cardIds: ["defuse-a", "nope-a", "attack-a", "skip-a", "cat-a"],
+          discardIndex: 2,
+        },
       };
       const labels = {
         reaction: "Nope",
@@ -1439,6 +1605,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         defuse: "Cài kín vị trí này",
         "defuse-random": "Cài bom ngẫu nhiên",
         combo: "Đánh 3 lá đã chọn",
+        reclaim: "Đánh 5 lá đã chọn",
       };
       await page
         .getByRole("button", { name: labels[state], exact: true })
@@ -1465,9 +1632,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         ).toBeDisabled();
         await expect(page.locator(".hand .card:enabled")).toHaveCount(0);
       }
-      if (state === "combo")
+      if (state === "combo" || state === "reclaim")
         for (const button of [
-          page.getByRole("button", { name: labels.combo, exact: true }),
+          page.getByRole("button", { name: labels[state], exact: true }),
           page.getByRole("button", { name: "Rút bài", exact: true }),
         ]) {
           await expect(button).toBeDisabled();

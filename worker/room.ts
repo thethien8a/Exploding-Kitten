@@ -129,10 +129,15 @@ export function parseCommand(value: unknown): ClientCommand {
       break;
     case "play":
       if (
-        !fields(action, ["type", "cardIds", "targetId", "requestedType"]) ||
+        !fields(action, [
+          "type",
+          "cardIds",
+          "targetId",
+          "requestedType",
+          "discardIndex",
+        ]) ||
         !Array.isArray(action.cardIds) ||
-        action.cardIds.length < 1 ||
-        action.cardIds.length > 3 ||
+        ![1, 2, 3, 5].includes(action.cardIds.length) ||
         !action.cardIds.every(identifier) ||
         (action.targetId !== undefined && !identifier(action.targetId)) ||
         (action.requestedType !== undefined &&
@@ -140,6 +145,19 @@ export function parseCommand(value: unknown): ClientCommand {
             !Object.hasOwn(CARD_COUNTS, action.requestedType)))
       )
         throw new Error("INVALID_COMMAND");
+      if (action.cardIds.length === 5) {
+        if (action.targetId !== undefined || action.requestedType !== undefined)
+          throw new Error("INVALID_COMMAND");
+        if (action.discardIndex === undefined)
+          throw new Error("DISCARD_INDEX_REQUIRED");
+        if (
+          !Number.isSafeInteger(action.discardIndex) ||
+          (action.discardIndex as number) < 0
+        )
+          throw new Error("INVALID_DISCARD_INDEX");
+      } else if (action.discardIndex !== undefined) {
+        throw new Error("INVALID_COMMAND");
+      }
       parsed = {
         type: "play",
         cardIds: action.cardIds,
@@ -149,6 +167,9 @@ export function parseCommand(value: unknown): ClientCommand {
           : {
               requestedType: action.requestedType as keyof typeof CARD_COUNTS,
             }),
+        ...(action.discardIndex === undefined
+          ? {}
+          : { discardIndex: action.discardIndex as number }),
       };
       break;
     default:
@@ -596,17 +617,19 @@ export class Room {
           this.state.lastPlay = {
             id: this.state.version + 1,
             playerId,
-            cards: next.discardPile.slice(this.state.game.discardPile.length),
+            cards: next.discardPile.slice(
+              action.type === "play" ? -action.cardIds.length : -1,
+            ),
             ...(action.type === "play" &&
             next.phase.kind === "reaction" &&
             "targetId" in next.phase.action
               ? { targetId: next.phase.action.targetId }
               : {}),
           };
-          this.state.reaction = {
-            deadline: now + NOPE_WINDOW_MS,
-            passedIds: [],
-          };
+          this.state.reaction =
+            next.phase.kind === "reaction"
+              ? { deadline: now + NOPE_WINDOW_MS, passedIds: [] }
+              : null;
         }
         this.state.game = next;
       }
@@ -625,7 +648,24 @@ export class Room {
       hostId: state.hostId,
       you: playerId,
       gameId: state.gameId,
-      lastPlay: game ? (state.lastPlay ?? null) : null,
+      lastPlay:
+        game && state.lastPlay
+          ? {
+              ...state.lastPlay,
+              cards: state.lastPlay.cards.map((card) =>
+                card.type === "exploding_kitten"
+                  ? {
+                      id:
+                        "public-explosion-" +
+                        game.discardPile.findIndex(
+                          (discard) => discard.id === card.id,
+                        ),
+                      type: card.type,
+                    }
+                  : card,
+              ),
+            }
+          : null,
       lastBomb: game ? (state.lastBomb ?? null) : null,
       lastTransfer:
         game &&

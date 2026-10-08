@@ -1400,6 +1400,203 @@ for (const count of [2, 3]) {
   );
 }
 
+for (const reclaimedType of ["defuse", "exploding_kitten"] as const) {
+  test(
+    "combo 5 lá lấy " +
+      CARD_NAMES[reclaimedType] +
+      " từ bài bỏ, không Nope và không đổi lại sau restart",
+    async ({ browser, request }, testInfo) => {
+      const { sessions, saved } = await prepare(request, "turn");
+      const game = saved.game!;
+      const pool = [
+        ...game.drawPile,
+        ...game.players.flatMap((player) => player.hand),
+      ];
+      const hands: CardType[][] = [
+        [
+          "defuse",
+          "attack",
+          "skip",
+          "favor",
+          "nope",
+          "beard_cat",
+          "tacocat",
+          "skip",
+        ],
+        [
+          "defuse",
+          "nope",
+          "see_future",
+          "tacocat",
+          "favor",
+          "shuffle",
+          "skip",
+          "cattermelon",
+        ],
+        [
+          "defuse",
+          "nope",
+          "see_future",
+          "tacocat",
+          "favor",
+          "shuffle",
+          "skip",
+          "hairy_potato_cat",
+        ],
+      ];
+      for (const [index, types] of hands.entries()) {
+        game.players[index].hand = types.map((type) => {
+          const position = pool.findIndex((card) => card.type === type);
+          expect(position).toBeGreaterThanOrEqual(0);
+          return pool.splice(position, 1)[0];
+        });
+      }
+      game.discardPile = ["attack", reclaimedType].map((type) => {
+        const index = pool.findIndex((card) => card.type === type);
+        expect(index).toBeGreaterThanOrEqual(0);
+        return pool.splice(index, 1)[0];
+      });
+      const safe = pool.findIndex((card) => card.type !== "exploding_kitten");
+      [pool[0], pool[safe]] = [pool[safe], pool[0]];
+      game.drawPile = pool;
+      game.turn.remaining = 2;
+      const turn = structuredClone(game.turn);
+      const before = structuredClone(game);
+      const costs = before.players[0].hand.slice(0, 5);
+      const reclaimed = before.discardPile[1];
+      const expectedHand = [...before.players[0].hand.slice(5), reclaimed];
+      const expectedDiscard = [before.discardPile[0], ...costs];
+      await writeStored(saved);
+      await start();
+      const { contexts, pages } = await group(browser, sessions);
+      try {
+        await resumed(pages);
+        const actor = pages[0];
+        for (const card of costs)
+          await actor
+            .locator('.hand .card[data-card-id="' + card.id + '"]')
+            .click();
+        const play = actor.getByRole("button", {
+          name: "Đánh 5 lá đã chọn",
+          exact: true,
+        });
+        await expect(play).toBeDisabled();
+        await expect(
+          actor.getByLabel("Mục tiêu (Xin Bài / combo)"),
+        ).toHaveCount(0);
+        const discard = actor.getByLabel("Lá bài bỏ muốn lấy");
+        const publicCardId = (await view(actor)).game!.discardPile[1].id;
+        await discard.selectOption(publicCardId);
+        await expect(play).toBeEnabled();
+        for (const width of [1280, 390, 320]) {
+          await actor.setViewportSize({ width, height: 900 });
+          expect(
+            await actor.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          ).toBe(true);
+          await actor.locator(".table-hand").screenshot({
+            path: testInfo.outputPath("five-card-exchange-" + width + ".png"),
+          });
+        }
+        await play.click();
+        await expect
+          .poll(async () => (await view(actor)).game!.hand)
+          .toEqual(expectedHand);
+        const played = await actor.evaluate(() =>
+          (window as unknown as TestWindow).wire.commands.at(-1)!,
+        );
+        expect(played.action).toEqual({
+          type: "play",
+          cardIds: costs.map((card) => card.id),
+          discardIndex: 1,
+        });
+        await resumed(pages, played.version + 1);
+        for (const page of pages) {
+          const snapshot = await view(page);
+          expect(snapshot.game!.phase).toEqual({ kind: "turn" });
+          expect(snapshot.game!.reaction).toBeNull();
+          expect(snapshot.game!.turn).toEqual(turn);
+          expect(snapshot.game!.drawCount).toBe(before.drawPile.length);
+          expect(snapshot.game!.discardPile).toEqual(expectedDiscard);
+          expect(snapshot.lastPlay).toMatchObject({
+            playerId: sessions[0].playerId,
+            cards: costs,
+          });
+          expect(snapshot.lastPlay).not.toHaveProperty("targetId");
+          await expect(
+            page.getByTestId("public-cards").locator(".table-card"),
+          ).toHaveCount(5);
+          await expect(page.getByTestId("last-play")).toHaveText(
+            "Thảo vừa đánh combo 5 lá khác loại",
+          );
+          await expect(
+            page.getByRole("region", { name: "Phản ứng Nope" }),
+          ).toHaveCount(0);
+          if (page !== actor)
+            expect(JSON.stringify(snapshot)).not.toContain(reclaimed.id);
+        }
+        await expect(
+          actor.locator('.hand .card[aria-pressed="true"]'),
+        ).toHaveCount(0);
+        await expect(discard).toHaveCount(0);
+        await pages[1].screenshot({
+          path: testInfo.outputPath("five-card-played-mobile.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+        const nope = (await view(pages[1])).game!.hand.find(
+          (card) => card.type === "nope",
+        )!;
+        expect(
+          await command(pages[1], { type: "nope", cardId: nope.id }),
+        ).toMatchObject({ ok: false, code: "NO_REACTION" });
+        expect(await command(pages[1], { type: "pass" })).toMatchObject({
+          ok: false,
+          code: "NO_REACTION",
+        });
+        expect((await view(pages[1])).game!.hand).toEqual(
+          before.players[1].hand,
+        );
+        const action = played.action;
+        expect(
+          await command(actor, action, {
+            id: played.id,
+            version: played.version,
+          }),
+        ).toMatchObject({ ok: true, version: played.version + 1 });
+        expect(
+          await command(actor, action, { version: played.version }),
+        ).toMatchObject({ ok: false, code: "STALE_VERSION" });
+        await stop();
+        const durable = await readStored(saved.roomId);
+        expect(durable.game!.players[0].hand).toEqual(expectedHand);
+        expect(durable.game!.discardPile).toEqual(expectedDiscard);
+        expect(durable.game!.turn).toEqual(turn);
+        expect(durable.reaction).toBeNull();
+        await start();
+        await resumed(pages, durable.version + 1);
+        expect(
+          await command(actor, action, {
+            id: played.id,
+            version: played.version,
+          }),
+        ).toMatchObject({ ok: true, version: played.version + 1 });
+        expect((await view(actor)).game!.hand).toEqual(expectedHand);
+        expect((await view(actor)).game!.discardPile).toEqual(expectedDiscard);
+        expect((await view(actor)).game!.reaction).toBeNull();
+        expect((await command(actor, { type: "draw" })).ok).toBe(true);
+        expect((await view(actor)).game!.turn).toEqual({
+          ...turn,
+          remaining: 1,
+        });
+      } finally {
+        await Promise.all(contexts.map((context) => context.close()));
+      }
+    },
+  );
+}
+
 for (const scenario of [
   { count: 2, succeeds: true },
   { count: 3, succeeds: true },
@@ -1628,7 +1825,7 @@ for (const scenario of [
   );
 }
 
-test("Attack qua Worker cộng 2, 4, 6 lượt; trả một lượt rồi chuyển 5 + 2 sau restart", async ({
+test("Attack qua Worker luôn chuyển 2 lượt, kể cả sau rút một lượt và restart", async ({
   browser,
   request,
 }) => {
@@ -1658,14 +1855,14 @@ test("Attack qua Worker cộng 2, 4, 6 lượt; trả một lượt rồi chuy�
   const { contexts, pages } = await group(browser, sessions);
   try {
     await resumed(pages);
-    for (const [index, debt] of [2, 4, 6, 7].entries()) {
+    for (const [index, debt] of [2, 2, 2, 2].entries()) {
       if (index === 3) {
         const drawn = await command(pages[0], { type: "draw" });
         expect(drawn.ok).toBe(true);
         await resumed(pages, drawn.version);
         expect((await view(pages[0])).game!.turn).toEqual({
           playerId: sessions[0].playerId,
-          remaining: 5,
+          remaining: 1,
           attacked: true,
         });
         await stop();
@@ -1679,6 +1876,9 @@ test("Attack qua Worker cộng 2, 4, 6 lượt; trả một lượt rồi chuy�
         .getByRole("button", { name: "LÁ BÀI Tấn Công", exact: true })
         .first()
         .click();
+      await expect(actor.locator(".card-help")).toHaveText(
+        "Tấn Công — Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
+      );
       await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
       await expect
         .poll(async () => (await view(actor)).game!.phase.kind)

@@ -13,7 +13,8 @@ import { CardFace, CARD_PATHS } from "./CardFace";
 const CARD_COPY: Record<CardType, string> = {
   exploding_kitten: "Cần Gỡ Bom để sống sót.",
   defuse: "Giữ lại để gỡ Mèo Nổ khi rút trúng.",
-  attack: "Chuyển lượt và cộng 2 lượt cho người kế tiếp.",
+  attack:
+    "Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
   skip: "Kết thúc một lượt mà không rút bài.",
   favor: "Chọn một người để họ cho bạn một lá.",
   shuffle: "Xáo chồng rút mà không xem bài.",
@@ -80,6 +81,7 @@ export function GameTable({
   const [selected, setSelected] = useState<string[]>([]);
   const [targetId, setTargetId] = useState("");
   const [requestedType, setRequestedType] = useState<CardType>("defuse");
+  const [discardChoice, setDiscardChoice] = useState({ id: "", pile: "" });
   const [position, setPosition] = useState<number | "random">(0);
   const [animatedPlay, setAnimatedPlay] = useState<number | null>(null);
   const [dismissedTransfer, setDismissedTransfer] = useState<number | null>(
@@ -145,8 +147,10 @@ export function GameTable({
   const announcement = latestIsPlay
     ? snapshot.members.find((member) => member.id === play.playerId)?.name +
       " vừa đánh " +
-      (play.cards.length > 1 ? "combo " + play.cards.length + " lá " : "") +
-      CARD_NAMES[play.cards[0].type] +
+      (play.cards.length === 5
+        ? "combo 5 lá khác loại"
+        : (play.cards.length > 1 ? "combo " + play.cards.length + " lá " : "") +
+          CARD_NAMES[play.cards[0].type]) +
       (play.targetId
         ? " nhắm vào " +
           snapshot.members.find((member) => member.id === play.targetId)?.name
@@ -163,9 +167,25 @@ export function GameTable({
     (member) => member.id === (receiving ? transfer?.fromId : transfer?.toId),
   )?.name;
   const needsTarget =
-    selected.length > 1 ||
+    selected.length === 2 ||
+    selected.length === 3 ||
     (selected.length === 1 &&
       game.hand.find((card) => card.id === selected[0])?.type === "favor");
+  const reclaiming = selected.length === 5;
+  const selectedTypes = new Set(
+    game.hand
+      .filter((card) => selected.includes(card.id))
+      .map((card) => card.type),
+  );
+  const validSelection =
+    selected.length === 1 ||
+    ([2, 3].includes(selected.length) && selectedTypes.size === 1) ||
+    (reclaiming && selectedTypes.size === 5);
+  const discardKey = JSON.stringify(game.discardPile);
+  const discardIndex =
+    discardChoice.pile === discardKey
+      ? game.discardPile.findIndex((card) => card.id === discardChoice.id)
+      : -1;
   const selectedCard = game.hand.find((card) => card.id === selected.at(-1));
   const reactionMs = Math.max(
     0,
@@ -420,10 +440,11 @@ export function GameTable({
               <div
                 className="discard-stack"
                 data-testid="public-cards"
+                data-count={shownCards.length}
                 key={play?.id ?? lastCard?.id ?? "empty"}
               >
                 {shownCards.length ? (
-                  shownCards.map((card) => (
+                  shownCards.map((card, index) => (
                     <div
                       key={card.id}
                       className={
@@ -433,6 +454,7 @@ export function GameTable({
                           : "")
                       }
                       data-type={card.type}
+                      style={{ "--card-index": index } as CSSProperties}
                     >
                       <CardFace type={card.type} />
                     </div>
@@ -630,19 +652,26 @@ export function GameTable({
               }
               aria-pressed={selected.includes(card.id)}
               disabled={locked || !(myTurn || giving)}
-              onClick={() =>
-                giving
-                  ? setSelected((current) =>
-                      current.includes(card.id) ? [] : [card.id],
-                    )
-                  : setSelected((current) =>
-                      current.includes(card.id)
-                        ? current.filter((id) => id !== card.id)
-                        : current.length < 3
-                          ? [...current, card.id]
-                          : current,
-                    )
-              }
+              onClick={() => {
+                if (
+                  !giving &&
+                  selected.length === 5 &&
+                  !selected.includes(card.id)
+                )
+                  return;
+                setDiscardChoice({ id: "", pile: "" });
+                setSelected((current) =>
+                  giving
+                    ? current.includes(card.id)
+                      ? []
+                      : [card.id]
+                    : current.includes(card.id)
+                      ? current.filter((id) => id !== card.id)
+                      : current.length < 5
+                        ? [...current, card.id]
+                        : current,
+                );
+              }}
             >
               <CardFace type={card.type} />
             </button>
@@ -650,7 +679,13 @@ export function GameTable({
         </div>
         {selectedCard && myTurn && (
           <p className="card-help">
-            {CARD_NAMES[selectedCard.type]} — {CARD_COPY[selectedCard.type]}
+            {selected.length >= 4
+              ? reclaiming && selectedTypes.size !== 5
+                ? "Combo 5 cần 5 lá khác loại. Hãy bỏ chọn lá trùng loại."
+                : "Combo 5 lá khác loại — Chọn 1 lá trong bài bỏ chung để lấy về tay. Không thể Nope; không kết thúc lượt."
+              : CARD_NAMES[selectedCard.type] +
+                " — " +
+                CARD_COPY[selectedCard.type]}
           </p>
         )}
         {giving && (
@@ -733,26 +768,31 @@ export function GameTable({
             )}
           </div>
         )}
+        {myTurn && reclaiming && (
+          <div className="target-controls">
+            <label htmlFor="discard">Lá bài bỏ muốn lấy</label>
+            <select
+              id="discard"
+              disabled={locked || !validSelection}
+              value={discardIndex < 0 ? "" : discardChoice.id}
+              onChange={(event) =>
+                setDiscardChoice({ id: event.target.value, pile: discardKey })
+              }
+            >
+              <option value="">Chọn một lá bài bỏ</option>
+              {game.discardPile.map((card, index) => (
+                <option key={card.id} value={card.id}>
+                  {CARD_NAMES[card.type]} · lá {index + 1}
+                </option>
+              ))}
+            </select>
+            {!game.discardPile.length && (
+              <p className="connection-note">Chồng bài bỏ đang trống.</p>
+            )}
+          </div>
+        )}
         <div className="hand-actions">
           <div className="actions">
-            {myTurn && (
-              <button
-                className="increment"
-                disabled={
-                  locked || !selected.length || (needsTarget && !targetId)
-                }
-                onClick={() =>
-                  send({
-                    type: "play",
-                    cardIds: selected,
-                    ...(needsTarget && targetId ? { targetId } : {}),
-                    ...(selected.length === 3 ? { requestedType } : {}),
-                  })
-                }
-              >
-                Đánh {selected.length} lá đã chọn
-              </button>
-            )}
             <button
               className="increment"
               disabled={locked || !myTurn}
@@ -760,6 +800,28 @@ export function GameTable({
             >
               Rút bài
             </button>
+            {myTurn && (
+              <button
+                className="increment"
+                disabled={
+                  locked ||
+                  !validSelection ||
+                  (needsTarget && !targetId) ||
+                  (reclaiming && discardIndex < 0)
+                }
+                onClick={() =>
+                  send({
+                    type: "play",
+                    cardIds: selected,
+                    ...(needsTarget && targetId ? { targetId } : {}),
+                    ...(selected.length === 3 ? { requestedType } : {}),
+                    ...(reclaiming ? { discardIndex } : {}),
+                  })
+                }
+              >
+                Đánh {selected.length} lá đã chọn
+              </button>
+            )}
           </div>
         </div>
         <details className="public-discard">

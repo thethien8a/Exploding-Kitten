@@ -375,6 +375,291 @@ describe("cửa sổ Nope phía server", () => {
   });
 });
 
+describe("combo 5 loại đổi bài bỏ không mở cửa sổ Nope", () => {
+  const costIds = ["skip-1", "future-1", "favor-1", "defuse-a", "nope-a"];
+
+  function exchangeRoom() {
+    const room = fixture();
+    const game = room.state.game!;
+    game.players[0].hand.push(
+      { id: "defuse-a", type: "defuse" },
+      { id: "nope-a", type: "nope" },
+    );
+    game.discardPile.push(
+      { id: "discarded-attack", type: "attack" },
+      { id: "discarded-bomb-1", type: "exploding_kitten" },
+      { id: "discarded-bomb-2", type: "exploding_kitten" },
+      { id: "discarded-defuse", type: "defuse" },
+    );
+    game.turn = { playerId: "a", remaining: 2, attacked: true };
+    return room;
+  }
+
+  test.each([0, 1, 2, 3])(
+    "đổi ngay lá bỏ ở index %i, kể cả bom có ID công khai đã che",
+    (discardIndex) => {
+      const room = exchangeRoom();
+      const before = structuredClone(room.state.game!);
+      const costs = costIds.map((id) =>
+        before.players[0].hand.find((card) => card.id === id)!,
+      );
+      const publicCard = room.view("a").game!.discardPile[discardIndex];
+      if (publicCard.type === "exploding_kitten") {
+        expect(publicCard.id).toBe("public-explosion-" + discardIndex);
+        expect(publicCard.id).not.toBe(before.discardPile[discardIndex].id);
+      }
+      const command = parseCommand(
+        envelope(room, { type: "play", cardIds: costIds, discardIndex }),
+      );
+      const random = vi.fn(() => {
+        throw new Error("must not use random");
+      });
+      const result = room.process("a", command, 1000, random);
+      expect(result.ok).toBe(true);
+      expect(room.state.game!.players[0].hand).toEqual([
+        { id: "shuffle-1", type: "shuffle" },
+        before.discardPile[discardIndex],
+      ]);
+      expect(room.state.game!.players.slice(1)).toEqual(
+        before.players.slice(1),
+      );
+      expect(room.state.game!.discardPile).toEqual([
+        ...before.discardPile.filter((_, index) => index !== discardIndex),
+        ...costs,
+      ]);
+      expect(room.state.game!.drawPile).toEqual(before.drawPile);
+      expect(room.state.game!.turn).toEqual(before.turn);
+      expect(room.state.game!.phase).toEqual({ kind: "turn" });
+      expect(room.state.reaction).toBeNull();
+      for (const viewer of ["a", "b", "c", null]) {
+        const snapshot = room.view(viewer);
+        expect(snapshot.lastPlay).toEqual({
+          id: result.version,
+          playerId: "a",
+          cards: costs,
+        });
+        expect(snapshot.game!.reaction).toBeNull();
+        expect(snapshot.game!.futureCards).toEqual([]);
+        expect(snapshot.lastTransfer).toBeNull();
+        if (viewer !== "a")
+          expect(JSON.stringify(snapshot)).not.toContain("discarded-bomb-");
+      }
+      expect(JSON.stringify(result)).not.toContain("discarded-bomb-");
+      expect(
+        room.nextAlarm(
+          new Map([
+            ["socket-a", 1000],
+            ["socket-b", 1000],
+            ["socket-c", 1000],
+          ]),
+        ),
+      ).toBe(1000 + CONNECTION_TIMEOUT_MS);
+      const view = room.view("a");
+      expect(send(room, "a", { type: "pass" }, 1200).code).toBe("NO_REACTION");
+      expect(
+        send(room, "b", { type: "nope", cardId: "nope-1" }, 1300).code,
+      ).toBe("NO_REACTION");
+      expect(room.expire(6000, random)).toBe(false);
+      expect(room.view("a")).toEqual(view);
+      expect(random).not.toHaveBeenCalled();
+    },
+  );
+
+  test("bom lấy về có thể trả trong combo sau, lastPlay và chồng bỏ dùng cùng ID che", () => {
+    const room = exchangeRoom();
+    expect(
+      send(room, "a", { type: "play", cardIds: costIds, discardIndex: 1 }).ok,
+    ).toBe(true);
+    room.state.game!.players[0].hand.push(
+      { id: "defuse-next", type: "defuse" },
+      { id: "nope-next", type: "nope" },
+      { id: "attack-next", type: "attack" },
+    );
+    const nextIds = [
+      "shuffle-1",
+      "defuse-next",
+      "nope-next",
+      "attack-next",
+      "discarded-bomb-1",
+    ];
+    const costs = nextIds.map((id) =>
+      room.state.game!.players[0].hand.find((card) => card.id === id)!,
+    );
+    expect(
+      send(room, "a", { type: "play", cardIds: nextIds, discardIndex: 0 }).ok,
+    ).toBe(true);
+    expect(room.state.lastPlay!.cards).toEqual(costs);
+    expect(room.state.game!.players[0].hand).toEqual([
+      { id: "discarded-attack", type: "attack" },
+    ]);
+    const restored = new Room(
+      JSON.parse(JSON.stringify(room.state)) as RoomState,
+    );
+    for (const viewer of ["a", "b", "c", null]) {
+      const snapshot = room.view(viewer);
+      const played = snapshot.lastPlay!.cards;
+      expect(played).toHaveLength(5);
+      expect(played.slice(0, 4)).toEqual(costs.slice(0, 4));
+      expect(played.at(-1)).toEqual(snapshot.game!.discardPile.at(-1));
+      expect(played.at(-1)!.id).toMatch(/^public-explosion-\d+$/);
+      expect(JSON.stringify(snapshot)).not.toContain("discarded-bomb-");
+      expect(restored.view(viewer)).toEqual(snapshot);
+    }
+    const exposed = restored.view("a");
+    exposed.lastPlay!.cards.at(-1)!.id = "changed";
+    expect(restored.view(null)).toEqual(room.view(null));
+  });
+
+  test.each([
+    {
+      invalid: "types",
+      code: "COMBO_MUST_DIFFER",
+      message: "Combo 5 lá cần 5 loại bài khác nhau.",
+    },
+    {
+      invalid: "ids",
+      code: "DUPLICATE_CARD",
+      message: "Mỗi lá bài chỉ được chọn một lần.",
+    },
+    {
+      invalid: "missing",
+      code: "DISCARD_INDEX_REQUIRED",
+      message: "Hãy chọn một lá đã có trong chồng bài bỏ để đổi combo 5 lá.",
+    },
+    {
+      invalid: "outside",
+      code: "INVALID_DISCARD_INDEX",
+      message: "Lá bài bỏ được chọn không hợp lệ hoặc không còn trong chồng.",
+    },
+    {
+      invalid: "empty",
+      code: "INVALID_DISCARD_INDEX",
+      message: "Lá bài bỏ được chọn không hợp lệ hoặc không còn trong chồng.",
+    },
+  ])(
+    "combo sai $invalid báo lỗi dễ đọc và không đổi bài/metadata",
+    ({ invalid, code, message }) => {
+      const room = exchangeRoom();
+      const action: Extract<RoomAction, { type: "play" }> = {
+        type: "play",
+        cardIds: [...costIds],
+        discardIndex: 0,
+      };
+      if (invalid === "types")
+        room.state.game!.players[0].hand.find(
+          (card) => card.id === "nope-a",
+        )!.type = "defuse";
+      if (invalid === "ids") action.cardIds[4] = action.cardIds[3];
+      if (invalid === "missing") delete action.discardIndex;
+      if (invalid === "outside")
+        action.discardIndex = room.state.game!.discardPile.length;
+      if (invalid === "empty")
+        room.state.game!.removedCards.push(
+          ...room.state.game!.discardPile.splice(0),
+        );
+      const before = room.view("a");
+      const game = structuredClone(room.state.game);
+      expect(send(room, "a", action)).toMatchObject({
+        ok: false,
+        code,
+        message,
+      });
+      expect(room.view("a")).toEqual(before);
+      expect(room.state.game).toEqual(game);
+    },
+  );
+
+  test.each([
+    { blocked: "turn", code: "NOT_YOUR_TURN" },
+    { blocked: "dead", code: "PLAYER_NOT_ALIVE" },
+    { blocked: "paused", code: "GAME_PAUSED" },
+    { blocked: "pending", code: "ACTION_PENDING" },
+  ])("combo 5 không được vượt điều kiện $blocked", ({ blocked, code }) => {
+    const room = exchangeRoom();
+    if (blocked === "turn") room.state.game!.turn.playerId = "b";
+    if (blocked === "dead") {
+      room.state.game!.players[0].alive = false;
+      room.state.game!.discardPile.push(
+        ...room.state.game!.players[0].hand.splice(0),
+      );
+      room.state.game!.turn.playerId = "b";
+    }
+    if (blocked === "paused") room.disconnect("b", "socket-b", 1100);
+    if (blocked === "pending")
+      expect(send(room, "a", { type: "play", cardIds: ["shuffle-1"] }).ok).toBe(
+        true,
+      );
+    const before = room.view("a");
+    const action: RoomAction = {
+      type: "play",
+      cardIds: costIds,
+      discardIndex: 0,
+    };
+    expect(send(room, "a", action, 1200).code).toBe(code);
+    expect(room.view("a")).toEqual(before);
+    if (blocked === "paused") {
+      room.connect("b", "returned-b", 1300);
+      expect(send(room, "a", action, 1400).ok).toBe(true);
+    }
+  });
+
+  test("replay giữ một lần đổi và đủ 5 lá; JSON restore tiếp tục trả nợ bằng rút", () => {
+    const room = exchangeRoom();
+    room.state.gameId = "five-card-game";
+    const command = parseCommand(
+      envelope(room, { type: "play", cardIds: costIds, discardIndex: 1 }),
+    );
+    const random = vi.fn(() => {
+      throw new Error("must not reroll");
+    });
+    const ack = room.process("a", command, 1000, random);
+    expect(ack.ok).toBe(true);
+    const saved = structuredClone(room.state);
+    expect(room.process("a", command, 7000, random)).toEqual(ack);
+    expect(room.state).toEqual(saved);
+    const restored = new Room(JSON.parse(JSON.stringify(saved)) as RoomState);
+    expect(restored.view("a")).toEqual(room.view("a"));
+    expect(restored.process("a", command, 7000, random)).toEqual(ack);
+    expect(restored.state).toEqual(saved);
+    expect(
+      restored.process(
+        "a",
+        {
+          ...command,
+          action: { ...command.action, discardIndex: 2 } as RoomAction,
+        },
+        7100,
+        random,
+      ).code,
+    ).toBe("COMMAND_ID_REUSED");
+    expect(
+      restored.process("a", { ...command, id: "second-exchange" }, 7200, random)
+        .code,
+    ).toBe("STALE_VERSION");
+    expect(restored.state.game).toEqual(saved.game);
+    expect(restored.view("a").lastPlay!.cards).toHaveLength(5);
+    expect(send(restored, "a", { type: "draw" }, 7300).ok).toBe(true);
+    expect(restored.state.game!.turn).toEqual({
+      playerId: "a",
+      remaining: 1,
+      attacked: true,
+    });
+    expect(send(restored, "a", { type: "draw" }, 7400).ok).toBe(true);
+    expect(restored.state.game!.turn).toEqual({
+      playerId: "b",
+      remaining: 1,
+      attacked: false,
+    });
+    expect(restored.state.gameId).toBe("five-card-game");
+    expect(restored.state.schemaVersion).toBe(1);
+    expect(restored.state.rulesVersion).toBe(saved.rulesVersion);
+    const continued = structuredClone(restored.state);
+    expect(restored.process("a", command, 7500, random)).toEqual(ack);
+    expect(restored.state).toEqual(continued);
+    expect(random).not.toHaveBeenCalled();
+  });
+});
+
 describe("lá vừa đánh công khai", () => {
   test.each([2, 3])(
     "combo %i lá giữ đủ bài và đúng người; Nope không gộp lượt trước",
@@ -1220,6 +1505,142 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
 });
 
 describe("validation biên mạng", () => {
+  test.each([1, 2, 3, 5])("parser nhận đúng lệnh đánh %i lá", (count) => {
+    const action: RoomAction = {
+      type: "play",
+      cardIds: Array.from({ length: count }, (_, index) => "cost-" + index),
+      ...(count === 2 || count === 3 ? { targetId: "b" } : {}),
+      ...(count === 3 ? { requestedType: "defuse" as const } : {}),
+      ...(count === 5 ? { discardIndex: 0 } : {}),
+    };
+    const command = { type: "command", id: "x", version: 0, action };
+    expect(parseCommand(command)).toEqual(command);
+  });
+
+  test.each([0, 4, 6, 9])("parser không nhận %i lá", (count) => {
+    expect(() =>
+      parseCommand({
+        type: "command",
+        id: "x",
+        version: 0,
+        action: {
+          type: "play",
+          cardIds: Array.from({ length: count }, (_, index) => "cost-" + index),
+          discardIndex: 0,
+        },
+      }),
+    ).toThrow("INVALID_COMMAND");
+  });
+
+  test.each([
+    undefined,
+    null,
+    -1,
+    0.5,
+    NaN,
+    Infinity,
+    "0",
+    Number.MAX_SAFE_INTEGER + 1,
+  ])("parser từ chối discardIndex thiếu/sai %s", (discardIndex) => {
+    expect(() =>
+      parseCommand({
+        type: "command",
+        id: "x",
+        version: 0,
+        action: {
+          type: "play",
+          cardIds: ["a", "b", "c", "d", "e"],
+          discardIndex,
+        },
+      }),
+    ).toThrow(
+      discardIndex === undefined
+        ? "DISCARD_INDEX_REQUIRED"
+        : "INVALID_DISCARD_INDEX",
+    );
+  });
+
+  test.each([0, 1, Number.MAX_SAFE_INTEGER])(
+    "parser nhận index nguyên an toàn %i, engine kiểm tra phạm vi",
+    (discardIndex) => {
+      const command = {
+        type: "command",
+        id: "x",
+        version: 0,
+        action: {
+          type: "play",
+          cardIds: ["a", "b", "c", "d", "e"],
+          discardIndex,
+        },
+      };
+      expect(parseCommand(command)).toEqual(command);
+    },
+  );
+
+  test.each([1, 2, 3])(
+    "discardIndex không liên quan tới combo %i lá bị chặn",
+    (count) => {
+      expect(() =>
+        parseCommand({
+          type: "command",
+          id: "x",
+          version: 0,
+          action: {
+            type: "play",
+            cardIds: Array.from(
+              { length: count },
+              (_, index) => "cost-" + index,
+            ),
+            discardIndex: 0,
+          },
+        }),
+      ).toThrow("INVALID_COMMAND");
+    },
+  );
+
+  test.each([{ targetId: "b" }, { requestedType: "defuse" }])(
+    "combo 5 không nhận lựa chọn cho combo khác %j",
+    (options) => {
+      expect(() =>
+        parseCommand({
+          type: "command",
+          id: "x",
+          version: 0,
+          action: {
+            type: "play",
+            cardIds: ["a", "b", "c", "d", "e"],
+            discardIndex: 0,
+            ...options,
+          },
+        }),
+      ).toThrow("INVALID_COMMAND");
+    },
+  );
+
+  test("chuẩn hóa combo 5 không đổi fingerprint khi thứ tự thuộc tính thay đổi", () => {
+    expect(
+      parseCommand({
+        action: {
+          discardIndex: 0,
+          cardIds: ["a", "b", "c", "d", "e"],
+          type: "play",
+        },
+        version: 2,
+        id: "x",
+        type: "command",
+      }),
+    ).toEqual({
+      type: "command",
+      id: "x",
+      version: 2,
+      action: {
+        type: "play",
+        cardIds: ["a", "b", "c", "d", "e"],
+        discardIndex: 0,
+      },
+    });
+  });
+
   test.each([
     null,
     [],

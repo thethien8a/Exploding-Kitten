@@ -54,6 +54,7 @@ export type GameCommand = { playerId: string } & (
       cardIds: string[];
       targetId?: string;
       requestedType?: CardType;
+      discardIndex?: number;
     }
   | { type: "nope"; cardId: string }
   | { type: "give"; cardId: string }
@@ -181,9 +182,9 @@ function takeCard(player: Player, cardId: string): Card {
 function prepareAction(
   state: GameState,
   command: Extract<GameCommand, { type: "play" }>,
-): Action {
+): Action | { type: "five"; discardIndex: number } {
   const player = livingPlayer(state, command.playerId);
-  if (![1, 2, 3].includes(command.cardIds.length)) {
+  if (![1, 2, 3, 5].includes(command.cardIds.length)) {
     throw new Error("INVALID_CARD_COUNT");
   }
   if (new Set(command.cardIds).size !== command.cardIds.length) {
@@ -194,6 +195,22 @@ function prepareAction(
     if (!card) throw new Error("CARD_NOT_IN_HAND");
     return card;
   });
+  if (cards.length === 5) {
+    if (command.targetId !== undefined || command.requestedType !== undefined)
+      throw new Error("INVALID_COMMAND");
+    if (new Set(cards.map((card) => card.type)).size !== 5)
+      throw new Error("COMBO_MUST_DIFFER");
+    if (command.discardIndex === undefined)
+      throw new Error("DISCARD_INDEX_REQUIRED");
+    if (
+      !Number.isSafeInteger(command.discardIndex) ||
+      command.discardIndex < 0 ||
+      command.discardIndex >= state.discardPile.length
+    )
+      throw new Error("INVALID_DISCARD_INDEX");
+    return { type: "five", discardIndex: command.discardIndex };
+  }
+  if (command.discardIndex !== undefined) throw new Error("INVALID_COMMAND");
   const type = cards[0].type;
   if (cards.some((card) => card.type !== type)) {
     throw new Error("COMBO_MUST_MATCH");
@@ -244,10 +261,14 @@ export function applyCommand(game: GameState, command: GameCommand): GameState {
     case "play": {
       requireTurn(state, player.id);
       const action = prepareAction(state, command);
+      if (action.type === "five") {
+        player.hand.push(state.discardPile.splice(action.discardIndex, 1)[0]);
+      } else {
+        state.phase = { kind: "reaction", action, nopeCount: 0 };
+      }
       for (const cardId of command.cardIds) {
         state.discardPile.push(takeCard(player, cardId));
       }
-      state.phase = { kind: "reaction", action, nopeCount: 0 };
       break;
     }
     case "nope": {
@@ -339,10 +360,9 @@ export function resolveReaction(game: GameState, random: Random): GameState {
   const player = livingPlayer(state, action.playerId);
   switch (action.type) {
     case "attack": {
-      const remaining = state.turn.attacked ? state.turn.remaining + 2 : 2;
       state.turn = {
         playerId: nextPlayer(state).id,
-        remaining,
+        remaining: 2,
         attacked: true,
       };
       break;

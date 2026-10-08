@@ -1009,6 +1009,7 @@ form > button {
   --cat-detail: var(--accent);
 }
 .discard-stack {
+  --combo-step: 11px;
   position: relative;
   width: 112px;
   height: 152px;
@@ -1657,6 +1658,7 @@ summary {
   .table-card,
   .empty-discard,
   .discard-stack {
+    --combo-step: 6px;
     width: 82px;
     height: 120px;
     border-radius: 10px;
@@ -1833,6 +1835,7 @@ summary {
   .table-card,
   .empty-discard,
   .discard-stack {
+    --combo-step: 3px;
     width: 64px;
     height: 104px;
   }
@@ -1864,6 +1867,10 @@ summary {
   .future-cards .table-card {
     height: 142px;
   }
+}
+.discard-stack[data-count="5"] .table-card:nth-child(n) {
+  transform: translateX(calc((var(--card-index) - 2) * var(--combo-step)))
+    rotate(calc((var(--card-index) - 2) * 5deg));
 }
 @media (prefers-reduced-motion: reduce) {
   .card-arriving {
