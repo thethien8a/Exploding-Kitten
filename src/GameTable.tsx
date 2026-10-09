@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   CARD_NAMES,
   NOPE_WINDOW_MS,
@@ -49,21 +55,36 @@ const TABLE_SEATS = {
     [90, 60],
   ],
 } as const;
+
+function Countdown({
+  deadline,
+  children,
+}: {
+  deadline: number;
+  children: (remainingMs: number) => ReactNode;
+}) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(timer);
+  }, [deadline]);
+  return children(Math.max(0, deadline - now));
+}
+
 export function GameTable({
   snapshot,
   session,
   locked,
   send,
-  now,
 }: {
   snapshot: RoomSnapshot;
   session: Session;
   locked: boolean;
   send: (action: RoomAction) => void;
-  now: number;
 }) {
   const game = snapshot.game!;
-  const phase = game.phase;
+  const { phase, idle, reaction } = game;
   const me = snapshot.members.find((member) => member.id === session.playerId)!;
   const giving = phase.kind === "favor" && phase.targetId === me.id;
   const targetedAction =
@@ -194,16 +215,11 @@ export function GameTable({
       ? game.discardPile.findIndex((card) => card.id === discardChoice.id)
       : -1;
   const selectedCard = game.hand.find((card) => card.id === selected.at(-1));
-  const reactionMs = Math.max(
-    0,
-    game.reaction ? game.reaction.deadline - now : 0,
-  );
-  const idleMs = Math.max(0, game.idle ? game.idle.deadline - now : 0);
   const offlineMembers = snapshot.members.filter(
     (member) => member.alive && !member.connected,
   );
   const idleName = snapshot.members.find(
-    (member) => member.id === game.idle?.playerId,
+    (member) => member.id === idle?.playerId,
   )?.name;
   const direction = game.direction ?? 1;
   const turnSeat = snapshot.members.findIndex(
@@ -248,16 +264,20 @@ export function GameTable({
             {direction === 1 ? "Chiều thuận" : "Chiều đảo"} · Tiếp theo:{" "}
             {nextMember?.name}
           </span>
-          {game.idle && (
-            <span role="timer" aria-label="Thời gian không hoạt động">
-              {game.idle.playerId !== game.turn.playerId && idleName + " · "}
-              {Math.ceil(idleMs / 1000)}s ·{" "}
-              {phase.kind === "favor"
-                ? "Tự cho 1 lá"
-                : phase.kind === "defuse"
-                  ? "Tự cài bom ngẫu nhiên"
-                  : "Tự rút bài"}
-            </span>
+          {idle && (
+            <Countdown deadline={idle.deadline}>
+              {(idleMs) => (
+                <span role="timer" aria-label="Thời gian không hoạt động">
+                  {idle.playerId !== game.turn.playerId && idleName + " · "}
+                  {Math.ceil(idleMs / 1000)}s ·{" "}
+                  {phase.kind === "favor"
+                    ? "Tự cho 1 lá"
+                    : phase.kind === "defuse"
+                      ? "Tự cài bom ngẫu nhiên"
+                      : "Tự rút bài"}
+                </span>
+              )}
+            </Countdown>
           )}
         </div>
       )}
@@ -526,83 +546,91 @@ export function GameTable({
           )}
         </div>
       </section>
-      {game.reaction && (
-        <section className="reaction table-reaction" aria-label="Phản ứng Nope">
-          <div>
-            <strong>Chờ Nope · {Math.ceil(reactionMs / 1000)}s</strong>
-            <p>
-              {phase.kind === "reaction" &&
-                (snapshot.members.find(
-                  (member) => member.id === phase.action.playerId,
-                )?.name ?? "Người chơi") +
-                  ": " +
-                  (phase.action.type === "pair"
-                    ? "Combo 2 lá"
-                    : phase.action.type === "triple"
-                      ? "Combo 3 lá"
-                      : CARD_NAMES[phase.action.type]) +
-                  ("targetId" in phase.action
-                    ? " → " +
-                      snapshot.members.find(
-                        (member) =>
-                          "targetId" in phase.action &&
-                          member.id === phase.action.targetId,
-                      )?.name
-                    : "") +
-                  " · " +
-                  phase.nopeCount +
-                  " Nope"}
-            </p>
-            {lastReactionPlayerId === me.id && (
-              <p>Không thể Nope bài vừa đánh.</p>
-            )}
-          </div>
-          <div className="actions">
-            <button
-              className="secondary"
-              disabled={
-                locked ||
-                !me.alive ||
-                lastReactionPlayerId === me.id ||
-                !game.hand.some((card) => card.type === "nope")
-              }
-              onClick={() =>
-                send({
-                  type: "nope",
-                  cardId: game.hand.find((card) => card.type === "nope")!.id,
-                })
-              }
+      {reaction && (
+        <Countdown deadline={reaction.deadline}>
+          {(reactionMs) => (
+            <section
+              className="reaction table-reaction"
+              aria-label="Phản ứng Nope"
             >
-              Nope
-            </button>
-            <button
-              className="secondary outline-button"
-              disabled={
-                locked || !me.alive || game.reaction.passedIds.includes(me.id)
-              }
-              onClick={() => send({ type: "pass" })}
-            >
-              Bỏ qua
-            </button>
-          </div>
-          <div
-            className="reaction-timer"
-            role="progressbar"
-            aria-label="Thời gian phản ứng Nope"
-            aria-valuemin={0}
-            aria-valuemax={NOPE_WINDOW_MS / 1000}
-            aria-valuenow={Math.min(
-              NOPE_WINDOW_MS / 1000,
-              Math.ceil(reactionMs / 1000),
-            )}
-          >
-            <span
-              style={{
-                width: Math.min(1, reactionMs / NOPE_WINDOW_MS) * 100 + "%",
-              }}
-            />
-          </div>
-        </section>
+              <div>
+                <strong>Chờ Nope · {Math.ceil(reactionMs / 1000)}s</strong>
+                <p>
+                  {phase.kind === "reaction" &&
+                    (snapshot.members.find(
+                      (member) => member.id === phase.action.playerId,
+                    )?.name ?? "Người chơi") +
+                      ": " +
+                      (phase.action.type === "pair"
+                        ? "Combo 2 lá"
+                        : phase.action.type === "triple"
+                          ? "Combo 3 lá"
+                          : CARD_NAMES[phase.action.type]) +
+                      ("targetId" in phase.action
+                        ? " → " +
+                          snapshot.members.find(
+                            (member) =>
+                              "targetId" in phase.action &&
+                              member.id === phase.action.targetId,
+                          )?.name
+                        : "") +
+                      " · " +
+                      phase.nopeCount +
+                      " Nope"}
+                </p>
+                {lastReactionPlayerId === me.id && (
+                  <p>Không thể Nope bài vừa đánh.</p>
+                )}
+              </div>
+              <div className="actions">
+                <button
+                  className="secondary"
+                  disabled={
+                    locked ||
+                    !me.alive ||
+                    lastReactionPlayerId === me.id ||
+                    !game.hand.some((card) => card.type === "nope")
+                  }
+                  onClick={() =>
+                    send({
+                      type: "nope",
+                      cardId: game.hand.find((card) => card.type === "nope")!
+                        .id,
+                    })
+                  }
+                >
+                  Nope
+                </button>
+                <button
+                  className="secondary outline-button"
+                  disabled={
+                    locked || !me.alive || reaction.passedIds.includes(me.id)
+                  }
+                  onClick={() => send({ type: "pass" })}
+                >
+                  Bỏ qua
+                </button>
+              </div>
+              <div
+                className="reaction-timer"
+                role="progressbar"
+                aria-label="Thời gian phản ứng Nope"
+                aria-valuemin={0}
+                aria-valuemax={NOPE_WINDOW_MS / 1000}
+                aria-valuenow={Math.min(
+                  NOPE_WINDOW_MS / 1000,
+                  Math.ceil(reactionMs / 1000),
+                )}
+              >
+                <span
+                  style={{
+                    width: Math.min(1, reactionMs / NOPE_WINDOW_MS) * 100 + "%",
+                  }}
+                />
+              </div>
+            </section>
+          )}
+        </Countdown>
       )}
       {(phase.kind === "future" || phase.kind === "alter_future") &&
         phase.playerId === me.id && (

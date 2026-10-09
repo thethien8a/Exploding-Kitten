@@ -73,6 +73,7 @@ async function jsonBody(request: Request): Promise<Record<string, unknown>> {
 export class GameRoom extends DurableObject<Env> {
   private room: Room | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  private nextRateLimitCleanup = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -133,27 +134,29 @@ export class GameRoom extends DurableObject<Env> {
     return connections;
   }
 
-  private save(): void {
-    if (!this.room) return;
-    this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS multiplayer_state (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL)",
-    );
-    this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS command_results (player_id TEXT NOT NULL, command_id TEXT NOT NULL, command TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY (player_id, command_id))",
-    );
+  private save(snapshot: string, initialize: boolean): void {
+    if (initialize) {
+      this.ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS multiplayer_state (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL)",
+      );
+      this.ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS command_results (player_id TEXT NOT NULL, command_id TEXT NOT NULL, command TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY (player_id, command_id))",
+      );
+    }
     this.ctx.storage.sql.exec(
       "INSERT INTO multiplayer_state (id, snapshot) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET snapshot = excluded.snapshot",
-      JSON.stringify(this.room.state),
+      snapshot,
     );
   }
 
   private async mutate<T>(operation: () => T): Promise<T> {
-    const before = this.room ? structuredClone(this.room.state) : null;
+    const before = this.room ? JSON.stringify(this.room.state) : null;
     try {
       return await this.ctx.storage.transaction(async () => {
         const result = operation();
-        if (JSON.stringify(before) !== JSON.stringify(this.room?.state ?? null))
-          this.save();
+        const snapshot = this.room ? JSON.stringify(this.room.state) : null;
+        if (before !== snapshot && snapshot !== null)
+          this.save(snapshot, before === null);
         if (this.room) {
           const scheduled = await this.ctx.storage.getAlarm();
           const next = this.room.nextAlarm(this.connectionTimes());
@@ -164,7 +167,7 @@ export class GameRoom extends DurableObject<Env> {
         return result;
       });
     } catch (error) {
-      this.room = before ? new Room(before) : null;
+      this.room = before ? new Room(JSON.parse(before) as RoomState) : null;
       if (error instanceof Error && /^[A-Z_]+$/.test(error.message))
         throw error;
       throw new Error("SAVE_FAILED");
@@ -176,6 +179,7 @@ export class GameRoom extends DurableObject<Env> {
       return false;
     await this.ctx.storage.deleteAll();
     this.room = null;
+    this.nextRateLimitCleanup = 0;
     this.ctx.setWebSocketAutoResponse();
     for (const socket of this.ctx.getWebSockets()) {
       this.send(socket, {
@@ -189,14 +193,19 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private limit(key: string, maximum: number, interval: number): boolean {
-    this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window INTEGER NOT NULL, count INTEGER NOT NULL)",
-    );
-    const window = Math.floor(Date.now() / interval) * interval;
-    this.ctx.storage.sql.exec(
-      "DELETE FROM rate_limits WHERE window < ?",
-      Date.now() - 120000,
-    );
+    const now = Date.now();
+    const window = Math.floor(now / interval) * interval;
+    // Cleanup can be amortized; every request still updates its durable counter.
+    if (now >= this.nextRateLimitCleanup) {
+      this.ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, window INTEGER NOT NULL, count INTEGER NOT NULL)",
+      );
+      this.ctx.storage.sql.exec(
+        "DELETE FROM rate_limits WHERE window < ?",
+        now - 120000,
+      );
+      this.nextRateLimitCleanup = now + 60000;
+    }
     const row = this.ctx.storage.sql
       .exec<{ count: number }>(
         "INSERT INTO rate_limits (key, window, count) VALUES (?, ?, 1) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN window = excluded.window THEN count + 1 ELSE 1 END, window = excluded.window RETURNING count",

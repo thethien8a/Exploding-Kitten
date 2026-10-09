@@ -47,7 +47,6 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [leftGame, setLeftGame] = useState(false);
-  const [now, setNow] = useState(Date.now());
   const socketRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef<ClientCommand | null>(null);
   const validRoom = !room || ROOM_ID_PATTERN.test(room);
@@ -232,12 +231,6 @@ function App() {
       socketRef.current = null;
     };
   }, [session]);
-  useEffect(() => {
-    if (!snapshot?.game?.reaction && !snapshot?.game?.idle) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(timer);
-  }, [snapshot?.game?.reaction?.deadline, snapshot?.game?.idle?.deadline]);
   async function enter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -384,7 +377,6 @@ function App() {
           session={session}
           locked={controlsLocked}
           send={send}
-          now={now}
         />
       </main>
     );
