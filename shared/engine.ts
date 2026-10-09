@@ -1,11 +1,14 @@
 export const CARD_COUNTS = {
   exploding_kitten: 4,
-  defuse: 6,
+  defuse: 8,
   attack: 4,
   skip: 4,
   favor: 4,
   shuffle: 4,
   see_future: 5,
+  alter_future: 3,
+  reverse: 3,
+  draw_bottom: 3,
   nope: 5,
   tacocat: 4,
   cattermelon: 4,
@@ -20,7 +23,16 @@ export type Random = () => number;
 export type Player = { id: string; alive: boolean; hand: Card[] };
 
 type Action = { playerId: string } & (
-  | { type: "attack" | "skip" | "shuffle" | "see_future" }
+  | {
+      type:
+        | "attack"
+        | "skip"
+        | "shuffle"
+        | "see_future"
+        | "alter_future"
+        | "reverse"
+        | "draw_bottom";
+    }
   | { type: "favor" | "pair"; targetId: string }
   | { type: "triple"; targetId: string; requestedType: CardType }
 );
@@ -35,6 +47,7 @@ export type Phase =
     }
   | { kind: "favor"; playerId: string; targetId: string }
   | { kind: "future"; playerId: string }
+  | { kind: "alter_future"; playerId: string }
   | { kind: "defuse"; playerId: string; bomb: Card }
   | { kind: "finished"; winnerId: string };
 
@@ -43,6 +56,8 @@ export type GameState = {
   drawPile: Card[];
   discardPile: Card[];
   removedCards: Card[];
+  // Snapshot cũ chưa có chiều chơi, mặc định theo thứ tự ghế ban đầu.
+  direction?: 1 | -1;
   turn: { playerId: string; remaining: number; attacked: boolean };
   phase: Phase;
 };
@@ -59,6 +74,7 @@ export type GameCommand = { playerId: string } & (
   | { type: "nope"; cardId: string }
   | { type: "give"; cardId: string }
   | { type: "close_future" }
+  | { type: "reorder_future"; order: number[] }
   | { type: "insert_bomb"; position: number }
 );
 
@@ -101,12 +117,12 @@ export function createGame(playerIds: string[], random: Random): GameState {
     hand: [defuses[index]],
   }));
   const extras = defuses.slice(players.length);
-  const returnedDefuses = players.length === 3 ? extras.slice(0, 2) : extras;
+  const returnedDefuses = players.length === 3 ? extras.slice(0, 4) : extras;
 
-  // Luật 2022 bước 3–4: Gỡ Bom dư có thể nằm trong 7 lá được chia thêm.
+  // Defuse dư vẫn trộn trước khi chia, nên một tay có thể nhận nhiều hơn một.
   drawPile.push(...returnedDefuses);
   shuffle(drawPile, random);
-  for (const player of players) player.hand.push(...drawPile.splice(0, 7));
+  for (const player of players) player.hand.push(...drawPile.splice(0, 4));
   // Mỗi ghế trên 3 người thêm một lá mỗi loại thường, không đổi tay khởi đầu.
   drawPile.push(
     ...Object.keys(CARD_COUNTS)
@@ -129,6 +145,7 @@ export function createGame(playerIds: string[], random: Random): GameState {
       ...bombs.slice(players.length - 1),
       ...extras.slice(returnedDefuses.length),
     ],
+    direction: 1,
     turn: {
       playerId: players[Math.floor(random() * players.length)].id,
       remaining: 1,
@@ -149,7 +166,10 @@ function nextPlayer(state: GameState): Player {
     (player) => player.id === state.turn.playerId,
   );
   for (let offset = 1; offset <= state.players.length; offset++) {
-    const player = state.players[(seat + offset) % state.players.length];
+    const index =
+      (seat + offset * (state.direction ?? 1) + state.players.length) %
+      state.players.length;
+    const player = state.players[index];
     if (player.alive) return player;
   }
   throw new Error("NO_LIVING_PLAYER");
@@ -166,6 +186,33 @@ function advanceTurn(state: GameState): void {
 function finishTurn(state: GameState): void {
   if (state.turn.remaining > 1) state.turn.remaining--;
   else advanceTurn(state);
+}
+
+function drawCard(state: GameState, player: Player, fromBottom = false): void {
+  const card = fromBottom ? state.drawPile.pop() : state.drawPile.shift();
+  if (!card) throw new Error("DRAW_PILE_EMPTY");
+  if (card.type !== "exploding_kitten") {
+    player.hand.push(card);
+    finishTurn(state);
+    return;
+  }
+  const defuse = player.hand.find((card) => card.type === "defuse");
+  if (defuse) {
+    state.discardPile.push(takeCard(player, defuse.id));
+    state.phase = { kind: "defuse", playerId: player.id, bomb: card };
+  } else {
+    state.discardPile.push(...player.hand, card);
+    player.hand = [];
+    player.alive = false;
+    const survivors = state.players.filter((candidate) => candidate.alive);
+    if (survivors.length === 1) {
+      const winnerId = survivors[0].id;
+      state.phase = { kind: "finished", winnerId };
+      state.turn = { playerId: winnerId, remaining: 0, attacked: false };
+    } else {
+      advanceTurn(state);
+    }
+  }
 }
 
 function requireTurn(state: GameState, playerId: string): void {
@@ -246,6 +293,9 @@ function prepareAction(
     case "skip":
     case "shuffle":
     case "see_future":
+    case "alter_future":
+    case "reverse":
+    case "draw_bottom":
       return { type, playerId: player.id };
     default:
       throw new Error("CARD_REQUIRES_COMBO_OR_SPECIAL_PHASE");
@@ -288,30 +338,7 @@ export function applyCommand(game: GameState, command: GameCommand): GameState {
     }
     case "draw": {
       requireTurn(state, player.id);
-      const card = state.drawPile.shift();
-      if (!card) throw new Error("DRAW_PILE_EMPTY");
-      if (card.type !== "exploding_kitten") {
-        player.hand.push(card);
-        finishTurn(state);
-        break;
-      }
-      const defuse = player.hand.find((card) => card.type === "defuse");
-      if (defuse) {
-        state.discardPile.push(takeCard(player, defuse.id));
-        state.phase = { kind: "defuse", playerId: player.id, bomb: card };
-      } else {
-        state.discardPile.push(...player.hand, card);
-        player.hand = [];
-        player.alive = false;
-        const survivors = state.players.filter((candidate) => candidate.alive);
-        if (survivors.length === 1) {
-          const winnerId = survivors[0].id;
-          state.phase = { kind: "finished", winnerId };
-          state.turn = { playerId: winnerId, remaining: 0, attacked: false };
-        } else {
-          advanceTurn(state);
-        }
-      }
+      drawCard(state, player);
       break;
     }
     case "insert_bomb": {
@@ -346,6 +373,29 @@ export function applyCommand(game: GameState, command: GameCommand): GameState {
       state.phase = { kind: "turn" };
       break;
     }
+    case "reorder_future": {
+      if (state.phase.kind !== "alter_future")
+        throw new Error("NO_ALTER_FUTURE");
+      if (state.phase.playerId !== player.id)
+        throw new Error("NOT_YOUR_CHOICE");
+      const cards = state.drawPile.slice(0, 3);
+      if (
+        command.order.length !== cards.length ||
+        new Set(command.order).size !== cards.length ||
+        command.order.some(
+          (index) =>
+            !Number.isInteger(index) || index < 0 || index >= cards.length,
+        )
+      )
+        throw new Error("INVALID_FUTURE_ORDER");
+      state.drawPile.splice(
+        0,
+        cards.length,
+        ...command.order.map((index) => cards[index]),
+      );
+      state.phase = { kind: "turn" };
+      break;
+    }
   }
   return state;
 }
@@ -370,11 +420,21 @@ export function resolveReaction(game: GameState, random: Random): GameState {
     case "skip":
       finishTurn(state);
       break;
+    case "reverse":
+      state.direction = state.direction === -1 ? 1 : -1;
+      finishTurn(state);
+      break;
+    case "draw_bottom":
+      drawCard(state, player, true);
+      break;
     case "shuffle":
       shuffle(state.drawPile, random);
       break;
     case "see_future":
       state.phase = { kind: "future", playerId: player.id };
+      break;
+    case "alter_future":
+      state.phase = { kind: "alter_future", playerId: player.id };
       break;
     case "favor": {
       const target = livingPlayer(state, action.targetId);
@@ -408,7 +468,10 @@ export function resolveReaction(game: GameState, random: Random): GameState {
 }
 
 export function getFutureCards(game: GameState, playerId: string): Card[] {
-  if (game.phase.kind !== "future" || game.phase.playerId !== playerId) {
+  if (
+    (game.phase.kind !== "future" && game.phase.kind !== "alter_future") ||
+    game.phase.playerId !== playerId
+  ) {
     return [];
   }
   return game.drawPile.slice(0, 3).map((card) => ({ ...card }));

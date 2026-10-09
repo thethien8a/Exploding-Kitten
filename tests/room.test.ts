@@ -67,6 +67,7 @@ function fixture() {
     turn: { playerId: "a", remaining: 1, attacked: false },
     phase: { kind: "turn" },
   };
+  room.state.idle = { playerId: "a", deadline: 61000 };
   return room;
 }
 function envelope(room: Room, action: RoomAction): ClientCommand {
@@ -106,13 +107,15 @@ describe("phòng chờ và quyền", () => {
       expect(send(room, "a", { type: "start" }).ok).toBe(true);
       expect(
         room.state.game!.players.map((player) => player.hand.length),
-      ).toEqual(Array(capacity).fill(8));
+      ).toEqual(Array(capacity).fill(5));
       expect(room.state.game!.drawPile).toHaveLength(
-        { 3: 29, 4: 34, 5: 38 }[capacity],
+        { 3: 49, 4: 60, 5: 70 }[capacity],
       );
-      expect(room.state.rulesVersion).toBe(
-        capacity === 3 ? "original-2022" : "original-2022-scaled",
-      );
+      expect(room.state.rulesVersion).toBe("original-2022-mixed");
+      expect(room.view(null).game!.idle).toEqual({
+        playerId: room.state.game!.turn.playerId,
+        deadline: 61000,
+      });
     },
   );
   test("thiếu ghế dù mọi người ready cũng không bắt đầu", () => {
@@ -375,6 +378,257 @@ describe("cửa sổ Nope phía server", () => {
   });
 });
 
+describe("60 giây không hoạt động và các lá mở rộng", () => {
+  test.each([60999, 61000, 61001])(
+    "lệnh tới sát hạn %i chỉ được rút đúng một lần",
+    (now) => {
+      const room = fixture();
+      const draw = envelope(room, { type: "draw" });
+      const ack = room.process("a", draw, now, () => 0);
+      expect(ack.ok).toBe(now < 61000);
+      if (now >= 61000) expect(ack.code).toBe("STALE_VERSION");
+      expect(room.view("a").game!.hand.at(-1)?.id).toBe("attack-4");
+      expect(room.view(null).game!.drawCount).toBe(3);
+      expect(room.view(null).game!.idle).toEqual({
+        playerId: "b",
+        deadline: now + 60000,
+      });
+      expect(room.process("a", draw, now + 1, () => 0.99)).toEqual(ack);
+      expect(room.expire(now + 1, () => 0.99)).toBe(false);
+    },
+  );
+
+  test("lệnh lỗi, ACK replay, heartbeat và tab thay thế không gia hạn", () => {
+    const room = fixture();
+    const play = envelope(room, { type: "play", cardIds: ["shuffle-1"] });
+    const ack = room.process("a", play, 30000, () => 0.5);
+    passAll(room, 31000);
+    expect(room.view(null).game!.idle).toEqual({
+      playerId: "a",
+      deadline: 91000,
+    });
+    expect(send(room, "b", { type: "draw" }, 50000).code).toBe("NOT_YOUR_TURN");
+    expect(
+      send(room, "a", { type: "play", cardIds: ["not-owned"] }, 55000).code,
+    ).toBe("CARD_NOT_IN_HAND");
+    expect(room.process("a", play, 60000, () => 0)).toEqual(ack);
+    room.connect("a", "replacement-a", 70000);
+    room.reconcileConnections(
+      new Map([
+        ["replacement-a", 80000],
+        ["socket-b", 80000],
+        ["socket-c", 80000],
+      ]),
+      80000,
+    );
+    expect(room.view(null).game!.idle).toEqual({
+      playerId: "a",
+      deadline: 91000,
+    });
+    expect(room.expire(90999, () => 0)).toBe(false);
+    expect(room.expire(91000, () => 0)).toBe(true);
+    expect(room.view(null).game!.turn.playerId).toBe("b");
+    expect(room.state.lastActivity).toBe(70000);
+  });
+
+  test("offline/restart giữ hạn, tự rút một lần và không rút bù qua nhiều lượt", () => {
+    let room = fixture();
+    room.reconcileConnections(new Map(), 21000);
+    expect(room.view("a").pause).toBeNull();
+    expect(room.nextAlarm(new Map())).toBe(61000);
+    room = new Room(JSON.parse(JSON.stringify(room.state)), 200000);
+    expect(room.view("a").game!.idle?.deadline).toBe(61000);
+    expect(room.expire(400000, () => 0)).toBe(true);
+    expect(room.view("a").game!.drawCount).toBe(3);
+    expect(room.view("a").game!.hand.at(-1)?.id).toBe("attack-4");
+    expect(room.view("a").game!.idle).toEqual({
+      playerId: "b",
+      deadline: 460000,
+    });
+    expect(room.expire(400000, () => 0)).toBe(false);
+    room.connect("a", "returned-a", 410000);
+    expect(room.view("a").game!.idle?.deadline).toBe(460000);
+    expect(send(room, "a", { type: "draw" }, 410001).code).toBe(
+      "NOT_YOUR_TURN",
+    );
+    expect(room.view("a").game!.drawCount).toBe(3);
+  });
+
+  test("alarm chọn hạn idle khi heartbeat còn khỏe; cancel xóa timer", () => {
+    const room = fixture();
+    const times = new Map([
+      ["socket-a", 60000],
+      ["socket-b", 59000],
+      ["socket-c", 58000],
+    ]);
+    expect(room.nextAlarm(times)).toBe(61000);
+    send(room, "a", { type: "cancel_game" }, 60500);
+    expect(room.state.idle).toBeNull();
+    expect(room.expire(61000, () => 0)).toBe(false);
+    expect(room.nextAlarm(times)).toBe(83000);
+  });
+
+  test("tự rút bom, tự cài ngẫu nhiên và trả từng lượt Attack", () => {
+    const room = fixture();
+    const game = room.state.game!;
+    game.turn = { playerId: "b", remaining: 2, attacked: true };
+    game.drawPile.reverse();
+    room.state.idle = { playerId: "b", deadline: 61000 };
+    room.disconnect("b", "socket-b");
+    expect(room.expire(61000, () => 0.9999)).toBe(true);
+    expect(room.view(null).lastBomb).toMatchObject({
+      playerId: "b",
+      outcome: "defusing",
+    });
+    expect(room.view(null).game!.phase).toEqual({
+      kind: "defuse",
+      playerId: "b",
+    });
+    expect(room.view(null).game!.turn.remaining).toBe(2);
+    expect(room.expire(121000, () => 0.9999)).toBe(true);
+    expect(room.state.game!.drawPile.at(-1)?.id).toBe("bomb-4");
+    expect(room.view(null).lastBomb).toMatchObject({
+      playerId: "b",
+      outcome: "defused",
+    });
+    expect(room.view(null).game!.turn).toEqual({
+      playerId: "b",
+      remaining: 1,
+      attacked: true,
+    });
+    expect(JSON.stringify(room.view(null))).not.toMatch(/bomb-4|position/);
+    expect(room.expire(181000, () => 0)).toBe(true);
+    expect(room.view(null).game!.turn.playerId).toBe("c");
+  });
+
+  test.each(["future", "alter_future", "favor"] as const)(
+    "lựa chọn %s hết giờ không kẹt ván hoặc lộ bài",
+    (phase) => {
+      const room = fixture();
+      if (phase === "alter_future")
+        room.state.game!.players[0].hand.push({
+          id: "alter-a",
+          type: "alter_future",
+        });
+      send(
+        room,
+        "a",
+        {
+          type: "play",
+          cardIds: [
+            phase === "future"
+              ? "future-1"
+              : phase === "alter_future"
+                ? "alter-a"
+                : "favor-1",
+          ],
+          ...(phase === "favor" ? { targetId: "b" } : {}),
+        },
+        2000,
+      );
+      passAll(room, 3000);
+      expect(room.view(null).game!.idle).toEqual({
+        playerId: phase === "favor" ? "b" : "a",
+        deadline: 63000,
+      });
+      room.disconnect(
+        phase === "favor" ? "b" : "a",
+        phase === "favor" ? "socket-b" : "socket-a",
+      );
+      const before = structuredClone(room.state.game!);
+      expect(room.expire(62999, () => 0.5)).toBe(false);
+      expect(room.expire(63000, () => 0.5)).toBe(true);
+      if (phase === "favor") {
+        expect(room.view("a").game!.hand.at(-1)).toEqual(
+          before.players[1].hand[1],
+        );
+        expect(room.view(null).game!.drawCount).toBe(4);
+        expect(room.view(null).game!.idle?.playerId).toBe("a");
+      } else {
+        expect(room.view("a").game!.hand.at(-1)).toEqual(before.drawPile[0]);
+        expect(room.state.game!.drawPile).toEqual(before.drawPile.slice(1));
+        expect(room.view(null).game!.idle?.playerId).toBe("b");
+      }
+      expect(room.view(null).game!.phase.kind).toBe("turn");
+      expect(room.view("c").game!.futureCards).toEqual([]);
+      expect(room.view(null).game!.futureCards).toEqual([]);
+    },
+  );
+
+  test("Rút Đáy qua deadline công khai bom, kết thúc ván xóa timer/ready", () => {
+    const room = fixture();
+    room.state.game!.players[0].hand.push({
+      id: "bottom-a",
+      type: "draw_bottom",
+    });
+    room.state.game!.players[2].alive = false;
+    room.state.game!.players[2].hand = [];
+    for (const member of room.state.members) member.ready = true;
+    send(room, "a", { type: "play", cardIds: ["bottom-a"] }, 2000);
+    expect(room.expire(6999, () => 0)).toBe(false);
+    expect(room.expire(7000, () => 0)).toBe(true);
+    expect(room.view(null).lastBomb).toMatchObject({
+      playerId: "a",
+      outcome: "exploded",
+    });
+    expect(room.view(null).game!.phase).toEqual({
+      kind: "finished",
+      winnerId: "b",
+    });
+    expect(room.view(null).game!.idle).toBeNull();
+    expect(room.view(null).members.every((member) => !member.ready)).toBe(true);
+  });
+
+  test("Sắp Tương Lai riêng tư, validate order và replay/restore không sắp lần hai", () => {
+    let room = fixture();
+    room.state.game!.players[0].hand.push({
+      id: "alter-a",
+      type: "alter_future",
+    });
+    send(room, "a", { type: "play", cardIds: ["alter-a"] });
+    passAll(room);
+    const top = room.view("a").game!.futureCards;
+    expect(top).toHaveLength(3);
+    for (const id of ["b", "c", null])
+      expect(room.view(id).game!.futureCards).toEqual([]);
+    expect(
+      send(room, "b", { type: "reorder_future", order: [2, 0, 1] }).code,
+    ).toBe("NOT_YOUR_CHOICE");
+    expect(
+      send(room, "a", { type: "reorder_future", order: [0, 0, 2] }).code,
+    ).toBe("INVALID_FUTURE_ORDER");
+    const command = parseCommand(
+      envelope(room, { type: "reorder_future", order: [2, 0, 1] }),
+    );
+    const ack = room.process("a", command, 4000, () => 0);
+    expect(ack.ok).toBe(true);
+    expect(room.state.game!.drawPile.slice(0, 3)).toEqual([
+      top[2],
+      top[0],
+      top[1],
+    ]);
+    expect(room.view(null).game!.idle?.deadline).toBe(64000);
+    expect(JSON.stringify(ack)).not.toMatch(/order|attack-4|rainbow-2|favor-4/);
+    room = new Room(JSON.parse(JSON.stringify(room.state)), 5000);
+    expect(room.process("a", command, 6000, () => 0)).toEqual(ack);
+    expect(room.view(null).game!.idle?.deadline).toBe(64000);
+    expect(send(room, "a", { type: "draw" }, 7000).ok).toBe(true);
+    expect(room.view("a").game!.hand.at(-1)).toEqual(top[2]);
+  });
+
+  test("snapshot cũ thiếu timer/chiều chơi giữ nguyên bài và thêm 60 giây", () => {
+    const room = fixture();
+    const { idle: _idle, ...legacy } = structuredClone(room.state);
+    const restored = new Room(legacy, 100000);
+    expect(restored.state.game).toEqual(room.state.game);
+    expect(restored.view(null).game!.direction).toBe(1);
+    expect(restored.view(null).game!.idle).toEqual({
+      playerId: "a",
+      deadline: 160000,
+    });
+  });
+});
+
 describe("combo 5 loại đổi bài bỏ không mở cửa sổ Nope", () => {
   const costIds = ["skip-1", "future-1", "favor-1", "defuse-a", "nope-a"];
 
@@ -572,7 +826,6 @@ describe("combo 5 loại đổi bài bỏ không mở cửa sổ Nope", () => {
   test.each([
     { blocked: "turn", code: "NOT_YOUR_TURN" },
     { blocked: "dead", code: "PLAYER_NOT_ALIVE" },
-    { blocked: "paused", code: "GAME_PAUSED" },
     { blocked: "pending", code: "ACTION_PENDING" },
   ])("combo 5 không được vượt điều kiện $blocked", ({ blocked, code }) => {
     const room = exchangeRoom();
@@ -584,7 +837,6 @@ describe("combo 5 loại đổi bài bỏ không mở cửa sổ Nope", () => {
       );
       room.state.game!.turn.playerId = "b";
     }
-    if (blocked === "paused") room.disconnect("b", "socket-b", 1100);
     if (blocked === "pending")
       expect(send(room, "a", { type: "play", cardIds: ["shuffle-1"] }).ok).toBe(
         true,
@@ -597,10 +849,6 @@ describe("combo 5 loại đổi bài bỏ không mở cửa sổ Nope", () => {
     };
     expect(send(room, "a", action, 1200).code).toBe(code);
     expect(room.view("a")).toEqual(before);
-    if (blocked === "paused") {
-      room.connect("b", "returned-b", 1300);
-      expect(send(room, "a", action, 1400).ok).toBe(true);
-    }
   });
 
   test("replay giữ một lần đổi và đủ 5 lá; JSON restore tiếp tục trả nợ bằng rút", () => {
@@ -1176,36 +1424,66 @@ describe("góc nhìn riêng và kết quả sau khi chốt", () => {
   });
 });
 
-describe("tạm dừng, khôi phục và vòng đời", () => {
-  test("đóng băng một lần, giữ pass và chỉ tiếp tục khi đủ người sống", () => {
+describe("mất kết nối, khôi phục và vòng đời", () => {
+  test("Nope vẫn chạy khi người đánh offline, người online được phản ứng", () => {
     const room = fixture();
     send(room, "a", { type: "play", cardIds: ["skip-1"] }, 1000);
     send(room, "b", { type: "pass" }, 1600);
     const game = structuredClone(room.state.game);
-    room.disconnect("a", "socket-a", 2700);
-    room.disconnect("b", "socket-b", 4700);
-    expect(room.view("c").pause).toEqual({
-      since: 2700,
-      remainingNopeMs: 3300,
-      missingIds: ["a", "b"],
+    room.disconnect("a", "socket-a");
+    room.disconnect("b", "socket-b");
+    expect(room.view("c").pause).toBeNull();
+    expect(room.view("c").game!.reaction).toEqual({
+      deadline: 6000,
+      passedIds: ["b"],
     });
     expect(room.state.game).toEqual(game);
     expect(room.state.hostId).toBe("a");
-    expect(room.expire(60000, () => 0.3)).toBe(false);
-    expect(
-      send(room, "c", { type: "nope", cardId: "nope-2" }, 60000).code,
-    ).toBe("GAME_PAUSED");
-    room.connect("a", "return-a", 61000);
-    expect(room.view("a").pause?.missingIds).toEqual(["b"]);
-    room.connect("b", "return-b", 65000);
-    expect(room.state.pause).toBeNull();
-    expect(room.state.reaction).toEqual({ deadline: 68300, passedIds: ["b"] });
-    expect(room.expire(68299, () => 0.3)).toBe(false);
-    expect(room.expire(68300, () => 0.3)).toBe(true);
+    expect(send(room, "c", { type: "nope", cardId: "nope-2" }, 4700).ok).toBe(
+      true,
+    );
+    expect(room.state.reaction).toEqual({ deadline: 9700, passedIds: [] });
+    expect(room.expire(9699, () => 0.3)).toBe(false);
+    expect(room.expire(9700, () => 0.3)).toBe(true);
+    expect(room.view("c").game!.turn.playerId).toBe("a");
+    expect(room.view("c").game!.idle).toEqual({
+      playerId: "a",
+      deadline: 69700,
+    });
     const settled = structuredClone(room.state);
-    expect(room.expire(68301, () => 0.9)).toBe(false);
+    expect(room.expire(9701, () => 0.9)).toBe(false);
     expect(room.state).toEqual(settled);
+    room.connect("a", "return-a", 10000);
+    expect(room.view("a").game!.idle?.deadline).toBe(69700);
   });
+  test.each(["turn", "reaction"] as const)(
+    "ván cũ đang pause %s chỉ chuyển thời gian còn lại một lần",
+    (phase) => {
+      const room = fixture();
+      if (phase === "reaction")
+        send(room, "a", { type: "play", cardIds: ["skip-1"] });
+      const saved = structuredClone(room.state);
+      saved.pause = {
+        since: 2100,
+        remainingNopeMs: phase === "reaction" ? 3900 : null,
+        remainingIdleMs: phase === "turn" ? 40000 : null,
+      };
+      const before = structuredClone(saved);
+      const restored = new Room(saved, 200000);
+      expect(saved).toEqual(before);
+      expect(restored.view(null).pause).toBeNull();
+      expect(restored.state.game).toEqual(saved.game);
+      const deadline = phase === "turn" ? 240000 : 203900;
+      const running = new Room(structuredClone(restored.state), 201000);
+      running.reconcileConnections(new Map(), 201000);
+      expect(running.nextAlarm(new Map())).toBe(deadline);
+      expect(running.expire(deadline - 1, () => 0)).toBe(false);
+      expect(running.expire(deadline, () => 0)).toBe(true);
+      expect(running.view(null).game!.turn.playerId).toBe("b");
+      expect(running.view(null).game!.drawCount).toBe(phase === "turn" ? 3 : 4);
+      expect(running.expire(deadline + 1, () => 0)).toBe(false);
+    },
+  );
   test.each(["turn", "reaction", "favor", "future", "defuse"] as const)(
     "restart giữ phase %s và phần riêng",
     (phase) => {
@@ -1232,28 +1510,33 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
       const game = structuredClone(room.state.game);
       const restored = new Room(
         JSON.parse(JSON.stringify(room.state)) as RoomState,
-        50000,
+        5000,
       );
-      restored.reconcileConnections(new Map(), 50000);
-      expect(restored.state.pause).not.toBeNull();
+      restored.reconcileConnections(new Map(), 5000);
       expect(
-        restored.expire(50000, () => {
+        restored.view(null).members.every((member) => !member.connected),
+      ).toBe(true);
+      expect(restored.state.pause).toBeNull();
+      expect(
+        restored.expire(5000, () => {
           throw new Error("must not reroll");
         }),
       ).toBe(false);
       expect(restored.state.game).toEqual(game);
-      for (const id of ["a", "b", "c"])
-        restored.connect(id, "new-" + id, 51000);
+      for (const id of ["a", "b", "c"]) restored.connect(id, "new-" + id, 5100);
       expect(restored.state.gameId).toBe("persistent-game");
       expect(restored.state.game).toEqual(game);
-      expect(restored.state.pause).toBeNull();
+      expect(restored.view("a").game!.idle).toEqual(room.view("a").game!.idle);
+      expect(restored.view("a").game!.reaction).toEqual(
+        room.view("a").game!.reaction,
+      );
       expect(restored.view("a").game!.futureCards).toEqual(
         room.view("a").game!.futureCards,
       );
       expect(restored.view("c").game!.futureCards).toEqual([]);
     },
   );
-  test("hibernation còn socket và heartbeat thật không tạo pause/đổi phiên bản", () => {
+  test("hibernation còn socket và heartbeat thật không đổi hạn/phiên bản", () => {
     const room = fixture();
     send(room, "a", { type: "play", cardIds: ["skip-1"] }, 1000);
     const restored = new Room(structuredClone(room.state), 5000);
@@ -1284,7 +1567,8 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     expect(room.view("b").members[0].connected).toBe(
       elapsed < CONNECTION_TIMEOUT_MS,
     );
-    expect(room.state.pause !== null).toBe(elapsed >= CONNECTION_TIMEOUT_MS);
+    expect(room.state.pause).toBeNull();
+    expect(room.view("b").game!.idle?.deadline).toBe(61000);
     expect(room.state.hostId).toBe("a");
   });
   test("người bị loại và chủ phòng bị loại rớt mạng không pause hoặc chuyển quyền", () => {
@@ -1292,23 +1576,26 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     room.state.game!.players[0].alive = false;
     room.state.game!.players[0].hand = [];
     room.state.game!.turn.playerId = "b";
-    room.disconnect("a", "socket-a", 4000);
+    room.state.idle = { playerId: "b", deadline: 61000 };
+    const game = structuredClone(room.view("b").game);
+    room.disconnect("a", "socket-a");
     expect(room.state.pause).toBeNull();
     expect(room.state.hostId).toBe("a");
+    expect(room.view("b").game).toEqual(game);
     expect(send(room, "b", { type: "draw" }, 5000).ok).toBe(true);
   });
   test("tab mới thay tab cũ giữa reaction không đóng băng nhầm", () => {
     const room = fixture();
     send(room, "a", { type: "play", cardIds: ["skip-1"] });
     room.connect("b", "new-b", 2400);
-    expect(room.disconnect("b", "socket-b", 2500)).toBe(false);
+    expect(room.disconnect("b", "socket-b")).toBe(false);
     expect(room.state.pause).toBeNull();
     expect(room.state.reaction!.deadline).toBe(6000);
   });
   test("chủ rời chủ động giữ ghế/bài, chuyển cho người online, chủ mới được hủy", () => {
     const room = fixture();
     const hand = structuredClone(room.state.game!.players[0].hand);
-    room.disconnect("b", "socket-b", 1500);
+    room.disconnect("b", "socket-b");
     expect(send(room, "a", { type: "leave" }, 2000).ok).toBe(true);
     expect(room.state.hostId).toBe("c");
     expect(room.state.members.map((member) => member.id)).toEqual([
@@ -1318,6 +1605,7 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     ]);
     expect(room.state.game!.players[0].hand).toEqual(hand);
     expect(room.state.game!.players[0].alive).toBe(true);
+    expect(room.view("c").game!.idle?.deadline).toBe(61000);
     expect(send(room, "b", { type: "cancel_game" }, 2100).code).toBe(
       "NOT_HOST",
     );
@@ -1329,8 +1617,8 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
   });
   test("chủ rời khi không ai online thì giữ quyền dự phòng và chuyển khi ghế hợp lệ trở lại", () => {
     const room = fixture();
-    room.disconnect("b", "socket-b", 2000);
-    room.disconnect("c", "socket-c", 2000);
+    room.disconnect("b", "socket-b");
+    room.disconnect("c", "socket-c");
     send(room, "a", { type: "leave" }, 3000);
     expect(room.state.hostId).toBe("a");
     room.connect("b", "return-b", 5000);
@@ -1375,9 +1663,9 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     expect(send(room, "a", { type: "start" }).ok).toBe(true);
     expect(room.state.gameId).not.toBe("old-game");
     expect(room.state.game!.players).toHaveLength(4);
-    expect(room.state.game!.drawPile).toHaveLength(34);
+    expect(room.state.game!.drawPile).toHaveLength(60);
   });
-  test("một alarm ưu tiên Nope, heartbeat, rồi TTL; alarm và GET không gia hạn", () => {
+  test("alarm vẫn ưu tiên Nope/idle khi tất cả offline; alarm và GET không gia hạn", () => {
     const room = fixture();
     for (const member of room.state.members)
       room.connect(member.id, "socket-" + member.id, 1000);
@@ -1388,15 +1676,19 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
       ["socket-c", 1600],
     ]);
     expect(room.nextAlarm(times)).toBe(6200);
-    room.disconnect("a", "socket-a", 2500);
-    expect(room.nextAlarm(times)).toBe(26000);
-    room.disconnect("b", "socket-b", 3000);
-    room.disconnect("c", "socket-c", 4000);
-    expect(room.nextAlarm(new Map())).toBe(1200 + ROOM_TTL_MS);
+    room.disconnect("a", "socket-a");
+    expect(room.nextAlarm(times)).toBe(6200);
+    room.disconnect("b", "socket-b");
+    room.disconnect("c", "socket-c");
+    expect(room.nextAlarm(new Map())).toBe(6200);
+    expect(room.expire(6200, () => 0.1)).toBe(true);
+    expect(room.nextAlarm(new Map())).toBe(66200);
     room.view(null);
     room.expire(90000, () => 0.1);
     expect(room.state.lastActivity).toBe(1200);
-    expect(room.nextAlarm(new Map())).toBe(1200 + ROOM_TTL_MS);
+    expect(room.nextAlarm(new Map())).toBe(150000);
+    expect(send(room, "a", { type: "cancel_game" }, 100000).ok).toBe(true);
+    expect(room.nextAlarm(new Map())).toBe(100000 + ROOM_TTL_MS);
   });
   test("ACK lưu trước restart giữ random, không chạy lại", () => {
     const room = fixture();
@@ -1455,6 +1747,7 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
     "original-2022",
     "original-2022-long",
     "original-2022-scaled",
+    "original-2022-mixed",
   ] as const)(
     "restart không thêm bài hoặc chia lại ván đã lưu theo %s",
     (rulesVersion) => {
@@ -1468,6 +1761,17 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
         send(room, member.id, { type: "ready", ready: true });
       expect(send(room, "a", { type: "start" }).ok).toBe(true);
       room.state.rulesVersion = rulesVersion;
+      if (rulesVersion !== "original-2022-mixed") {
+        const game = room.state.game!;
+        const oldCard = (card: { id: string; type: string }) =>
+          !["alter_future", "reverse", "draw_bottom"].includes(card.type) &&
+          !["defuse-7", "defuse-8"].includes(card.id);
+        game.drawPile = game.drawPile.filter(oldCard);
+        game.removedCards = game.removedCards.filter(oldCard);
+        for (const player of game.players)
+          player.hand = player.hand.filter(oldCard);
+        delete game.direction;
+      }
       if (rulesVersion === "original-2022-long") {
         for (const [type, count] of [
           ["attack", 2],
@@ -1490,16 +1794,19 @@ describe("tạm dừng, khôi phục và vòng đời", () => {
           );
         }
       }
+      if (rulesVersion === "original-2022-mixed") {
+        const game = room.state.game!;
+        for (const player of game.players)
+          while (player.hand.length < 8) {
+            const index = game.drawPile.findIndex(
+              (card) => card.type !== "exploding_kitten",
+            );
+            player.hand.push(...game.drawPile.splice(index, 1));
+          }
+      }
       const saved = JSON.parse(JSON.stringify(room.state)) as RoomState;
       const restored = new Room(saved);
       expect(restored.state).toEqual(saved);
-      expect(restored.state.game!.drawPile).toHaveLength(
-        {
-          "original-2022": 29,
-          "original-2022-long": 53,
-          "original-2022-scaled": 34,
-        }[rulesVersion],
-      );
     },
   );
 });

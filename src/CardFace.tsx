@@ -10,6 +10,10 @@ export const CARD_PATHS: Partial<Record<CardType, string>> = {
     "M5 12h7c9 0 15 24 24 24h7M36 29l7 7-7 7M5 36h7c9 0 15-24 24-24h7M36 5l7 7-7 7",
   see_future:
     "M3 24s8-14 21-14 21 14 21 14-8 14-21 14S3 24 3 24ZM24 16a8 8 0 1 0 0 16 8 8 0 1 0 0-16",
+  alter_future:
+    "M8 7h10v15H8ZM29 26h10v15H29ZM25 8h14l-5-5M39 8l-5 5M23 40H9l5-5M9 40l5 5",
+  reverse: "M8 16h30l-9-9M38 16l-9 9M40 32H10l9-9M10 32l9 9",
+  draw_bottom: "M8 6h24v26H8ZM8 38h24M38 18v24l-6-6M38 42l6-6",
   nope: "M13 28V14a3 3 0 0 1 6 0v10V8a3 3 0 0 1 6 0v16V10a3 3 0 0 1 6 0v14V15a3 3 0 0 1 6 0v17c0 9-6 12-13 12-8 0-12-7-17-14a3 3 0 0 1 5-4l7 8",
   exploding_kitten:
     "M24 13a14 14 0 1 0 0 28 14 14 0 1 0 0-28M24 13V6h8M32 6l4-4M37 9l5 2",

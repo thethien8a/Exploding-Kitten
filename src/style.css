@@ -790,6 +790,15 @@ form > button {
   background: var(--accent);
   border-radius: 50%;
 }
+.turn-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
 .oval-table {
   position: relative;
   height: 430px;
@@ -1041,6 +1050,8 @@ form > button {
   --card-color: #993c24;
 }
 :is(.table-card, .card)[data-type="skip"],
+:is(.table-card, .card)[data-type="reverse"],
+:is(.table-card, .card)[data-type="draw_bottom"],
 :is(.table-card, .card)[data-type="favor"] {
   --card-bg: #f7edc9;
   --card-border: #d6c695;
@@ -1052,6 +1063,7 @@ form > button {
   --card-color: #385438;
 }
 :is(.table-card, .card)[data-type="see_future"],
+:is(.table-card, .card)[data-type="alter_future"],
 :is(.table-card, .card)[data-type="shuffle"] {
   --card-bg: #e3ede7;
   --card-border: #b5c9bf;
@@ -1121,7 +1133,7 @@ form > button {
     scale: 1;
   }
 }
-.pause-banner,
+.connection-notice,
 .private-choice {
   border: 1px solid #d9c29a;
   border-radius: 16px;
@@ -1130,7 +1142,7 @@ form > button {
   margin: 0 0 14px;
   font-size: 14px;
 }
-.pause-banner p {
+.connection-notice p {
   margin: 6px 0 0;
   font-size: 13px;
 }
@@ -1266,6 +1278,12 @@ form > button {
 }
 .future-cards li {
   counter-increment: future;
+  flex: 0 1 132px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
 }
 .future-cards li::before {
   content: counter(future);
@@ -1273,7 +1291,20 @@ form > button {
   font-weight: 700;
 }
 .future-cards .table-card {
+  width: 100%;
   height: 184px;
+}
+.future-controls {
+  display: flex;
+  gap: 4px;
+}
+.future-controls .secondary {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 10px;
 }
 .bomb-controls {
   display: flex;
@@ -1751,7 +1782,7 @@ summary {
   .table-reaction strong {
     font-size: 18px;
   }
-  .pause-banner,
+  .connection-notice,
   .private-choice,
   .target-warning,
   .bomb-warning {
@@ -1759,7 +1790,7 @@ summary {
     font-size: 12px;
     border-radius: 14px;
   }
-  .pause-banner p {
+  .connection-notice p {
     font-size: 12px;
   }
   .favor-confirmation .actions {

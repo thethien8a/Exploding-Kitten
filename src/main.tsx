@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  CARD_NAMES,
   ROOM_ID_PATTERN,
   HEARTBEAT_MS,
   CONNECTION_TIMEOUT_MS,
@@ -149,7 +150,7 @@ function App() {
           setLeftGame(true);
           setBusy(false);
           setError(
-            "Bạn đã rời ván. Ghế và bài được giữ; bấm Quay lại ghế để tiếp tục.",
+            "Bạn đã rời ván. Ghế được giữ, nhưng ván và đồng hồ vẫn chạy. Bấm Quay lại ghế để tiếp tục.",
           );
           return;
         }
@@ -211,11 +212,10 @@ function App() {
       connect();
     }
     function resume(event: Event) {
+      // A suspended tab can miss close callbacks, so resume must reconnect even a closed socket.
       if (
         document.visibilityState !== "visible" ||
-        (event.type === "pageshow" &&
-          !(event as PageTransitionEvent).persisted) ||
-        socketRef.current?.readyState === WebSocket.CLOSED
+        (event.type === "pageshow" && !(event as PageTransitionEvent).persisted)
       )
         return;
       reconnect();
@@ -234,11 +234,11 @@ function App() {
     };
   }, [session]);
   useEffect(() => {
-    if (!snapshot?.game?.reaction || snapshot.pause) return;
+    if (!snapshot?.game?.reaction && !snapshot?.game?.idle) return;
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(timer);
-  }, [snapshot?.game?.reaction?.deadline, snapshot?.pause?.since]);
+  }, [snapshot?.game?.reaction?.deadline, snapshot?.game?.idle?.deadline]);
   async function enter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -300,7 +300,6 @@ function App() {
   const game = snapshot?.game;
   const phase = game?.phase;
   const controlsLocked = busy || connection !== "connected";
-  const locked = controlsLocked || !!snapshot?.pause;
   const canStart =
     snapshot?.members.length === snapshot?.capacity &&
     snapshot?.members.every((member) => member.ready && member.connected);
@@ -384,7 +383,7 @@ function App() {
           key={snapshot.gameId}
           snapshot={snapshot}
           session={session}
-          locked={locked}
+          locked={controlsLocked}
           send={send}
           now={now}
         />
@@ -609,7 +608,7 @@ function App() {
                     {host && member.id !== session.playerId && (
                       <button
                         className="text-button"
-                        disabled={locked}
+                        disabled={controlsLocked}
                         onClick={() =>
                           send({ type: "kick", targetId: member.id })
                         }
@@ -640,7 +639,7 @@ function App() {
                 <button
                   className="secondary"
                   aria-pressed={me?.ready ?? false}
-                  disabled={locked}
+                  disabled={controlsLocked}
                   onClick={() => send({ type: "ready", ready: !me?.ready })}
                 >
                   {me?.ready ? "Hủy sẵn sàng" : "Sẵn sàng"}
@@ -648,7 +647,7 @@ function App() {
                 {host && (
                   <button
                     className="increment"
-                    disabled={locked || !canStart}
+                    disabled={controlsLocked || !canStart}
                     onClick={() => send({ type: "start" })}
                   >
                     Bắt đầu ván
@@ -686,7 +685,7 @@ function App() {
                   <select
                     id="room-capacity"
                     value={snapshot?.capacity ?? capacity}
-                    disabled={locked}
+                    disabled={controlsLocked}
                     onChange={(event) =>
                       send({
                         type: "set_capacity",
@@ -709,7 +708,7 @@ function App() {
               <div className="lobby-tip">
                 <CatMark />
                 <span>
-                  Giữ Gỡ Bom bên mình.
+                  Giữ {CARD_NAMES.defuse} bên mình.
                   <br />
                   <strong>Giữ bạn bè ở gần hơn.</strong>
                 </span>

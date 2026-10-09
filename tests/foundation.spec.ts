@@ -345,9 +345,9 @@ for (const capacity of [3, 4, 5]) {
         const snapshots = await Promise.all(pages.slice(0, capacity).map(view));
         for (let index = 0; index < capacity; index++) {
           const snapshot = snapshots[index];
-          expect(snapshot.game!.hand).toHaveLength(8);
+          expect(snapshot.game!.hand).toHaveLength(5);
           expect(snapshot.game!.drawCount).toBe(
-            { 3: 29, 4: 34, 5: 38 }[capacity],
+            { 3: 49, 4: 60, 5: 70 }[capacity],
           );
           const payload = JSON.stringify(snapshot);
           expect(payload).not.toMatch(
@@ -476,7 +476,7 @@ for (const capacity of [3, 4, 5]) {
         for (const page of pages.slice(0, capacity))
           await expect
             .poll(async () => (await view(page)).game!.drawCount)
-            .toBe({ 3: 28, 4: 33, 5: 37 }[capacity]);
+            .toBe({ 3: 48, 4: 59, 5: 69 }[capacity]);
         expect((await view(actor)).version).toBe(version + 1);
         expect(await view(other)).toEqual(isolated);
         for (const page of pages.slice(0, capacity))
@@ -1033,12 +1033,11 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       ).toHaveText("Đã kết nối");
       if (state === "reclaim")
         await expect(page.getByTestId("last-play")).toHaveText(
-          "Lá bỏ mới nhất · Bỏ Lượt",
+          "Lá bỏ mới nhất · Skip",
         );
       else
         await expect(page.getByTestId("last-play")).toHaveText(
-          "Minh vừa đánh Xin Bài" +
-            (state === "future" ? "" : " nhắm vào Thảo"),
+          "Minh vừa đánh Favor" + (state === "future" ? "" : " nhắm vào Thảo"),
         );
       const warning = page.getByRole("alert", { name: "Bạn đang bị nhắm tới" });
       const marker = page.getByRole("img", { name: "Đang bị nhắm tới" });
@@ -1058,7 +1057,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       if (state === "reaction") {
         await expect(
           page.getByRole("region", { name: "Phản ứng Nope" }),
-        ).toContainText("Minh: Xin Bài → Thảo");
+        ).toContainText("Minh: Favor → Thảo");
         for (const nopeCount of [3, 4]) {
           const next = structuredClone(snapshot);
           next.game!.phase = {
@@ -1082,13 +1081,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         const timer = page.getByRole("progressbar", {
           name: "Thời gian phản ứng Nope",
         });
-        const paused = structuredClone(snapshot);
-        paused.pause = {
-          since: Date.now(),
-          missingIds: ["b"],
-          remainingNopeMs: 1250,
-        };
-        paused.members[1].connected = false;
+        const offline = structuredClone(snapshot);
+        offline.game!.reaction!.deadline = Date.now() + 3500;
+        offline.members[1].connected = false;
         await page.evaluate(
           (next) =>
             (
@@ -1096,22 +1091,20 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
                 publishSnapshot: (next: RoomSnapshot) => void;
               }
             ).publishSnapshot(next),
-          paused,
+          offline,
         );
-        await expect(timer).toHaveAttribute("aria-valuenow", "2");
-        await expect(timer.locator("span")).toHaveAttribute(
-          "style",
-          "width: 25%;",
-        );
-        await page.waitForTimeout(1100);
-        await expect(timer).toHaveAttribute("aria-valuenow", "2");
-        await expect(timer.locator("span")).toHaveAttribute(
-          "style",
-          "width: 25%;",
-        );
+        const seconds = Number(await timer.getAttribute("aria-valuenow"));
+        expect(seconds).toBeGreaterThan(0);
+        await expect
+          .poll(async () => Number(await timer.getAttribute("aria-valuenow")))
+          .toBeLessThan(seconds);
+        await expect(
+          page.getByRole("region", { name: "Người chơi mất kết nối" }),
+        ).toContainText("Ván vẫn tiếp tục");
         await page.screenshot({
-          path: testInfo.outputPath("modern-paused-nope.png"),
+          path: testInfo.outputPath("modern-offline-nope.png"),
           fullPage: true,
+          animations: "disabled",
         });
         const resumed = structuredClone(snapshot);
         resumed.game!.reaction!.deadline = Date.now() - 100;
@@ -1146,7 +1139,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       }
       if (state === "future")
         await expect(
-          page.getByText("Ba lá trên cùng — chỉ bạn thấy"),
+          page.getByText("Xem 3 lá trên cùng — chỉ bạn thấy"),
         ).toBeVisible();
       if (state === "favor") {
         await expect(
@@ -1163,11 +1156,11 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
           page.getByRole("button", { name: "Xác nhận cho bài" }),
         ).toBeDisabled();
         const defuse = page.getByRole("button", {
-          name: "BẢO VỆ Gỡ Bom",
+          name: "BẢO VỆ Defuse",
           exact: true,
         });
         const nope = page.getByRole("button", {
-          name: "PHẢN ỨNG Chặn — Nope",
+          name: "PHẢN ỨNG Nope",
           exact: true,
         });
         await defuse.click();
@@ -1179,11 +1172,11 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         ).toHaveCount(1);
         await expect(
           page.getByRole("region", { name: "Xác nhận cho bài" }),
-        ).toContainText("Bạn muốn đưa Chặn — Nope cho Minh?");
+        ).toContainText("Bạn muốn đưa Nope cho Minh?");
         await expect(page.locator(".card-help")).toHaveCount(0);
         await expect(
           page.getByRole("button", {
-            name: "Xác nhận đưa Chặn — Nope cho Minh",
+            name: "Xác nhận đưa Nope cho Minh",
           }),
         ).toHaveText("Xác nhận");
         await page.getByRole("button", { name: "Hủy chọn" }).click();
@@ -1209,7 +1202,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         await defuse.click();
         await expect(defuse).toHaveAttribute("aria-pressed", "true");
         await expect(page.locator(".card-help")).toHaveText(
-          "Gỡ Bom — Giữ lại để gỡ Mèo Nổ khi rút trúng.",
+          "Defuse — Giữ lại để gỡ Exploding Kitten khi rút trúng.",
         );
         await page.evaluate(
           (next) =>
@@ -1246,17 +1239,17 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       }
       if (defusing) {
         await expect(
-          page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
-        ).toHaveText("Thảo rút trúng Mèo Nổ!");
+          page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
+        ).toHaveText("Thảo rút trúng Exploding Kitten!");
         const placement = page.getByRole("region", { name: "Cài bom kín" });
         await expect(placement).toContainText(
-          "Cài Mèo Nổ (0 = trên cùng, 7 = dưới cùng)",
+          "Cài Exploding Kitten (0 = trên cùng, 7 = dưới cùng)",
         );
         await expect(placement.getByRole("button")).toHaveText([
           "Ngẫu nhiên",
           "Cài kín vị trí này",
         ]);
-        const input = page.getByLabel(/Cài Mèo Nổ/);
+        const input = page.getByLabel(/Cài Exploding Kitten/);
         const confirm = placement.getByRole("button", {
           name: /^Cài (kín vị trí này|bom ngẫu nhiên)$/,
         });
@@ -1332,21 +1325,17 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         await expect(play).toHaveCSS("opacity", "0.5");
         await expect(draw).toBeEnabled();
         await expect(draw).toHaveCSS("opacity", "1");
-        const cards = page.getByRole("button", { name: /Mèo Taco/ });
+        const cards = page.getByRole("button", { name: /Tacocat/ });
         for (let index = 0; index < 3; index++) await cards.nth(index).click();
         await expect(play).toBeDisabled();
-        await page.getByLabel("Mục tiêu (Xin Bài / combo)").selectOption("b");
+        await page.getByLabel("Mục tiêu (Favor / combo)").selectOption("b");
         await page.getByLabel("Loại bài gọi tên").selectOption("attack");
         await expect(page.locator(".card-help")).toHaveText(
-          "Mèo Taco — Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
+          "Tacocat — Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
         );
-        const paused = structuredClone(snapshot);
-        paused.pause = {
-          since: Date.now(),
-          remainingNopeMs: null,
-          missingIds: ["b"],
-        };
-        paused.members[1].connected = false;
+        const offline = structuredClone(snapshot);
+        offline.members[1].connected = false;
+        offline.game!.idle = { playerId: "a", deadline: Date.now() + 45000 };
         await page.evaluate(
           (next) =>
             (
@@ -1354,18 +1343,25 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
                 publishSnapshot: (next: RoomSnapshot) => void;
               }
             ).publishSnapshot(next),
-          paused,
+          offline,
         );
-        const pause = page.getByRole("region", { name: "Ván tạm dừng" });
-        await expect(pause).toContainText("Chờ Minh kết nối lại.");
-        await expect(pause.locator("p")).toHaveCount(1);
-        await expect(play).toBeDisabled();
-        await expect(draw).toBeDisabled();
-        for (const width of [1280, 320]) {
+        const notice = page.getByRole("region", {
+          name: "Người chơi mất kết nối",
+        });
+        await expect(notice).toContainText("Minh đang mất kết nối");
+        await expect(play).toBeEnabled();
+        await expect(draw).toBeEnabled();
+        const timer = page.getByRole("timer", {
+          name: "Thời gian không hoạt động",
+        });
+        const ticking = await timer.textContent();
+        await expect(timer).not.toHaveText(ticking!);
+        for (const width of [1280, 390, 320]) {
           await page.setViewportSize({ width, height: 900 });
           await page.screenshot({
-            path: testInfo.outputPath("minimal-pause-" + width + ".png"),
+            path: testInfo.outputPath("minimal-offline-" + width + ".png"),
             fullPage: true,
+            animations: "disabled",
           });
         }
         await page.evaluate(
@@ -1377,7 +1373,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
             ).publishSnapshot(next),
           snapshot,
         );
-        await expect(pause).toHaveCount(0);
+        await expect(notice).toHaveCount(0);
         for (const width of [1280, 390, 320]) {
           await page.setViewportSize({ width, height: 900 });
           await page.mouse.move(0, 0);
@@ -1435,7 +1431,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         const discard = page.getByLabel("Lá bài bỏ muốn lấy");
         await expect(discard).toBeEnabled();
         await expect(play).toBeDisabled();
-        await expect(page.getByLabel("Mục tiêu (Xin Bài / combo)")).toHaveCount(
+        await expect(page.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
           0,
         );
         await expect(
@@ -1443,9 +1439,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         ).toHaveCount(0);
         await expect(discard.locator("option")).toHaveText([
           "Chọn một lá bài bỏ",
-          "Xin Bài · lá 1",
-          "Mèo Nổ · lá 2",
-          "Bỏ Lượt · lá 3",
+          "Favor · lá 1",
+          "Exploding Kitten · lá 2",
+          "Skip · lá 3",
         ]);
         const twoBombs = structuredClone(snapshot);
         twoBombs.game!.discardPile.splice(2, 0, {
@@ -1461,6 +1457,13 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
             ).publishSnapshot(next),
           twoBombs,
         );
+        await expect(discard.locator("option")).toHaveText([
+          "Chọn một lá bài bỏ",
+          "Favor · lá 1",
+          "Exploding Kitten · lá 2",
+          "Exploding Kitten · lá 3",
+          "Skip · lá 4",
+        ]);
         await discard.selectOption("public-explosion-1");
         await expect(play).toBeEnabled();
         await page.evaluate(
@@ -1565,13 +1568,13 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
             hand.scrollLeft = hand.scrollWidth;
           });
           const last = page.getByRole("button", {
-            name: "LÁ BÀI Mèo Cầu Vồng",
+            name: "LÁ BÀI Rainbow-Ralphing Cat",
             exact: true,
           });
           await expect(last).toBeInViewport();
           if (width === 390)
             await expect(
-              page.getByRole("button", { name: "BẢO VỆ Gỡ Bom", exact: true }),
+              page.getByRole("button", { name: "BẢO VỆ Defuse", exact: true }),
             ).not.toBeInViewport();
           await page.screenshot({
             path: testInfo.outputPath("table-long-cards-" + width + ".png"),
@@ -1601,7 +1604,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       const labels = {
         reaction: "Nope",
         future: "Đóng tương lai",
-        favor: "Xác nhận đưa Chặn — Nope cho Minh",
+        favor: "Xác nhận đưa Nope cho Minh",
         defuse: "Cài kín vị trí này",
         "defuse-random": "Cài bom ngẫu nhiên",
         combo: "Đánh 3 lá đã chọn",
@@ -1621,7 +1624,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         await expect(page.locator(".bomb-controls button:enabled")).toHaveCount(
           0,
         );
-        await expect(page.getByLabel(/Cài Mèo Nổ/)).toBeDisabled();
+        await expect(page.getByLabel(/Cài Exploding Kitten/)).toBeDisabled();
       }
       if (state === "favor") {
         await expect(

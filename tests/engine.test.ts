@@ -105,11 +105,11 @@ function seededRandom(seed: number): Random {
   };
 }
 
-describe("bộ gốc Original Edition 2022 và số bài theo số người", () => {
-  test("56 ID duy nhất, đủ 13 loại với số lượng từ PDF", () => {
+describe("bộ cơ bản pha mở rộng và số bài theo số người", () => {
+  test("67 ID duy nhất, 16 loại và thêm 2 Gỡ Bom", () => {
     const deck = createDeck();
-    expect(deck).toHaveLength(56);
-    expect(new Set(deck.map((card) => card.id)).size).toBe(56);
+    expect(deck).toHaveLength(67);
+    expect(new Set(deck.map((card) => card.id)).size).toBe(67);
     const counts = Object.fromEntries(
       [...new Set(deck.map((card) => card.type))].map((type) => [
         type,
@@ -118,12 +118,15 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
     );
     expect(counts).toEqual({
       exploding_kitten: 4,
-      defuse: 6,
+      defuse: 8,
       attack: 4,
       skip: 4,
       favor: 4,
       shuffle: 4,
       see_future: 5,
+      alter_future: 3,
+      reverse: 3,
+      draw_bottom: 3,
       nope: 5,
       tacocat: 4,
       cattermelon: 4,
@@ -136,29 +139,29 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
   test.each([
     {
       players: 3,
-      deck: 29,
+      deck: 49,
       bombs: 2,
-      defuses: 5,
+      defuses: 7,
       removed: 3,
-      total: 56,
+      total: 67,
       extraCopies: 0,
     },
     {
       players: 4,
-      deck: 34,
+      deck: 60,
       bombs: 3,
-      defuses: 6,
+      defuses: 8,
       removed: 1,
-      total: 67,
+      total: 81,
       extraCopies: 1,
     },
     {
       players: 5,
-      deck: 38,
+      deck: 70,
       bombs: 4,
-      defuses: 6,
+      defuses: 8,
       removed: 0,
-      total: 78,
+      total: 95,
       extraCopies: 2,
     },
   ])("$players người: chồng $deck lá, $bombs bom", (expected) => {
@@ -166,7 +169,7 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
     const game = createGame(ids, seededRandom(149));
     expect(game.players.map((player) => player.id)).toEqual(ids);
     for (const player of game.players) {
-      expect(player.hand).toHaveLength(8);
+      expect(player.hand).toHaveLength(5);
       expect(player.hand.some((card) => card.type === "defuse")).toBe(true);
       expect(player.hand.some((card) => card.type === "exploding_kitten")).toBe(
         false,
@@ -203,7 +206,7 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
       createDeck().sort((a, b) => a.id.localeCompare(b.id)),
     );
     const extra = game.drawPile.filter((card) => card.id.startsWith("extra-"));
-    expect(extra).toHaveLength(expected.total - 56);
+    expect(extra).toHaveLength(expected.total - 67);
     expect(
       Object.fromEntries(
         [...new Set(extra.map((card) => card.type))].map((type) => [
@@ -220,6 +223,9 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
             favor: expected.extraCopies,
             shuffle: expected.extraCopies,
             see_future: expected.extraCopies,
+            alter_future: expected.extraCopies,
+            reverse: expected.extraCopies,
+            draw_bottom: expected.extraCopies,
             nope: expected.extraCopies,
             tacocat: expected.extraCopies,
             cattermelon: expected.extraCopies,
@@ -238,8 +244,8 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
     expect(
       game.players[0].hand.filter((card) => card.type === "defuse"),
     ).toHaveLength(2);
-    expect(game.players[0].hand).toHaveLength(8);
-    expect(game.drawPile).toHaveLength(29);
+    expect(game.players[0].hand).toHaveLength(5);
+    expect(game.drawPile).toHaveLength(49);
   });
 
   test.each([
@@ -273,6 +279,187 @@ describe("bộ gốc Original Edition 2022 và số bài theo số người", ()
     "từ chối ID ghế trùng/rỗng $ids",
     ({ ids }) => {
       expect(() => createGame(ids, () => 0)).toThrow("INVALID_PLAYER_IDS");
+    },
+  );
+});
+
+describe("Alter the Future, Reverse và Draw from the Bottom", () => {
+  test("sắp kín đúng 3 lá, không sửa phần còn lại hoặc kết thúc lượt", () => {
+    const initial = fixture(
+      [["alter_future"], [], []],
+      ["skip", "exploding_kitten", "favor", "defuse"],
+    );
+    const pending = play(initial, "alter_future");
+    expect(getFutureCards(pending, "an")).toEqual([]);
+    const future = settle(pending);
+    expect(getFutureCards(future, "an")).toEqual(initial.drawPile.slice(0, 3));
+    expect(getFutureCards(future, "binh")).toEqual([]);
+    expect(() =>
+      move(future, {
+        type: "reorder_future",
+        playerId: "binh",
+        order: [2, 0, 1],
+      }),
+    ).toThrow("NOT_YOUR_CHOICE");
+    expect(() =>
+      move(future, { type: "close_future", playerId: "an" }),
+    ).toThrow("NO_FUTURE");
+    const reordered = move(JSON.parse(JSON.stringify(future)), {
+      type: "reorder_future",
+      playerId: "an",
+      order: [2, 0, 1],
+    });
+    expect(reordered.drawPile).toEqual([
+      initial.drawPile[2],
+      initial.drawPile[0],
+      initial.drawPile[1],
+      initial.drawPile[3],
+    ]);
+    expect(reordered.turn).toEqual(initial.turn);
+    expect(reordered.phase).toEqual({ kind: "turn" });
+    expect(getFutureCards(reordered, "an")).toEqual([]);
+    expect(
+      move(reordered, { type: "draw", playerId: "an" }).players[0].hand,
+    ).toEqual([initial.drawPile[2]]);
+  });
+
+  test.each(
+    [[], [0, 1], [0, 0, 2], [0, 1, 3], [-1, 0, 1], [0, 1, 1.5]].map(
+      (order) => ({ order }),
+    ),
+  )("từ chối thứ tự thiếu/trùng/ngoài phạm vi %j", ({ order }) => {
+    const future = settle(
+      play(
+        fixture([["alter_future"], [], []], ["skip", "favor", "defuse"]),
+        "alter_future",
+      ),
+    );
+    expect(() =>
+      move(future, { type: "reorder_future", playerId: "an", order }),
+    ).toThrow("INVALID_FUTURE_ORDER");
+  });
+
+  test.each([0, 1, 2])("chỉ sắp %i lá khi chồng còn ít hơn 3", (count) => {
+    const game = fixture(
+      [["alter_future"], [], []],
+      (["skip", "favor"] as CardType[]).slice(0, count),
+    );
+    const future = settle(play(game, "alter_future"));
+    const order = count === 2 ? [1, 0] : count === 1 ? [0] : [];
+    expect(
+      move(future, { type: "reorder_future", playerId: "an", order }).drawPile,
+    ).toEqual([...game.drawPile].reverse());
+  });
+
+  test("Reverse đổi chiều lâu dài, Attack dùng chiều mới và bỏ qua ghế đã chết", () => {
+    let game = fixture(
+      [["reverse", "reverse"], ["skip"], ["tacocat"], ["attack"]],
+      ["favor", "defuse"],
+    );
+    game.players[2].alive = false;
+    game.players[2].hand = [];
+    game = settle(play(game, "reverse"));
+    expect(game.direction).toBe(-1);
+    expect(game.turn.playerId).toBe("dung");
+    game = settle(play(game, "attack"));
+    expect(game.turn).toEqual({
+      playerId: "binh",
+      remaining: 2,
+      attacked: true,
+    });
+    game = settle(play(game, "skip"));
+    expect(game.turn.remaining).toBe(1);
+    game = move(game, { type: "draw", playerId: "binh" });
+    expect(game.turn.playerId).toBe("an");
+    game = settle(play(game, "reverse"));
+    expect(game.direction).toBe(1);
+    expect(game.turn.playerId).toBe("binh");
+  });
+
+  test("Reverse chỉ trả một lượt Attack; rút và bị loại tiếp tục theo chiều đảo", () => {
+    let game = fixture(
+      [["reverse"], ["skip"], ["favor"]],
+      ["exploding_kitten", "defuse"],
+    );
+    game.turn = { playerId: "an", remaining: 2, attacked: true };
+    game = settle(play(game, "reverse"));
+    expect(game.turn).toEqual({ playerId: "an", remaining: 1, attacked: true });
+    game = move(game, { type: "draw", playerId: "an" });
+    expect(game.players[0].alive).toBe(false);
+    expect(game.turn.playerId).toBe("chi");
+  });
+
+  test("còn 2 người, Reverse kết thúc lượt như Skip", () => {
+    const game = fixture([["reverse"], [], ["favor"]], ["defuse"]);
+    game.players[1].alive = false;
+    const result = settle(play(game, "reverse"));
+    expect(result.turn.playerId).toBe("chi");
+    expect(result.drawPile).toEqual(game.drawPile);
+  });
+
+  test("Rút Đáy tránh bom ở đầu và chỉ trả một lượt Attack", () => {
+    const game = fixture(
+      [["draw_bottom"], [], []],
+      ["exploding_kitten", "skip", "favor"],
+    );
+    game.turn = { playerId: "an", remaining: 2, attacked: true };
+    const result = settle(play(game, "draw_bottom"));
+    expect(result.players[0].hand).toEqual([game.drawPile[2]]);
+    expect(result.drawPile).toEqual(game.drawPile.slice(0, 2));
+    expect(result.turn).toEqual({
+      playerId: "an",
+      remaining: 1,
+      attacked: true,
+    });
+  });
+
+  test.each([true, false])(
+    "bom dưới đáy xử lý Gỡ Bom/loại đúng (có Gỡ Bom: %s)",
+    (defusing) => {
+      const game = fixture(
+        [["draw_bottom", ...(defusing ? ["defuse" as const] : [])], [], []],
+        ["skip", "exploding_kitten"],
+      );
+      game.direction = -1;
+      const result = settle(play(game, "draw_bottom"));
+      expect(result.drawPile).toEqual([game.drawPile[0]]);
+      if (defusing) {
+        expect(result.phase).toEqual({
+          kind: "defuse",
+          playerId: "an",
+          bomb: game.drawPile[1],
+        });
+        expect(
+          move(result, { type: "insert_bomb", playerId: "an", position: 1 })
+            .turn.playerId,
+        ).toBe("chi");
+      } else {
+        expect(result.players[0].alive).toBe(false);
+        expect(result.turn.playerId).toBe("chi");
+      }
+    },
+  );
+
+  test.each(["alter_future", "reverse", "draw_bottom"] as const)(
+    "Nope chặn %s, không lộ/sắp/rút/đổi chiều",
+    (type) => {
+      const game = fixture(
+        [[type], ["nope"], []],
+        ["skip", "favor", "exploding_kitten"],
+      );
+      const pending = play(game, type);
+      const result = settle(
+        move(pending, {
+          type: "nope",
+          playerId: "binh",
+          cardId: game.players[1].hand[0].id,
+        }),
+      );
+      expect(result.phase).toEqual({ kind: "turn" });
+      expect(result.turn).toEqual(game.turn);
+      expect(result.direction).toBe(game.direction);
+      expect(result.drawPile).toEqual(game.drawPile);
+      expect(getFutureCards(result, "an")).toEqual([]);
     },
   );
 });
@@ -1456,7 +1643,7 @@ describe("bất biến và dữ liệu thuần", () => {
         }
         expect(game.phase.kind).toBe("finished");
         expect(commands).toBeLessThan(100);
-        expect(inventory(game)).toHaveLength({ 3: 56, 4: 67, 5: 78 }[count]);
+        expect(inventory(game)).toHaveLength({ 3: 67, 4: 81, 5: 95 }[count]);
         expect(
           game.discardPile.filter((card) => card.type === "exploding_kitten"),
         ).toHaveLength(count - 1);

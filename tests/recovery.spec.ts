@@ -36,7 +36,8 @@ type Wire = {
   droppedAck: CommandResult | null;
 };
 type TestWindow = Window & { wire: Wire };
-type PendingPhase = "turn" | "reaction" | "favor" | "future" | "defuse";
+type PendingPhase =
+  "turn" | "reaction" | "favor" | "future" | "alter_future" | "defuse";
 
 async function start() {
   server = await preview({
@@ -174,12 +175,14 @@ async function prepare(
     phase === "reaction" ||
     phase === "favor" ||
     phase === "future" ||
+    phase === "alter_future" ||
     phase === "shuffle"
   ) {
     const type = {
       reaction: "skip",
       favor: "favor",
       future: "see_future",
+      alter_future: "alter_future",
       shuffle: "shuffle",
     }[phase] as CardType;
     coreCommand(room, sessions[0].playerId, {
@@ -187,7 +190,7 @@ async function prepare(
       cardIds: [ensureCard(room, type)],
       ...(phase === "favor" ? { targetId: sessions[1].playerId } : {}),
     });
-    if (phase === "favor" || phase === "future")
+    if (phase === "favor" || phase === "future" || phase === "alter_future")
       for (const session of sessions)
         coreCommand(room, session.playerId, { type: "pass" });
   } else if (phase === "defuse") {
@@ -201,7 +204,7 @@ async function prepare(
   expect(room.state.game!.phase.kind).toBe(
     phase === "shuffle" ? "reaction" : phase,
   );
-  expect(room.state.pause).not.toBeNull();
+  expect(room.state.pause).toBeNull();
   await writeStored(room.state);
   return { sessions, saved: structuredClone(room.state) };
 }
@@ -339,6 +342,271 @@ async function command(
   return result;
 }
 
+test("Alter the Future qua UI: riêng tư, không khóa khi offline và restart SQLite", async ({
+  browser,
+  request,
+}) => {
+  const { sessions, saved } = await prepare(request, "alter_future");
+  const pile = saved.game!.drawPile;
+  for (const [index, type] of (
+    ["defuse", "skip", "favor"] as const
+  ).entries()) {
+    const found = pile.findIndex((card) => card.type === type);
+    expect(found).toBeGreaterThanOrEqual(0);
+    [pile[index], pile[found]] = [pile[found], pile[index]];
+  }
+  const top = pile.slice(0, 3);
+  await writeStored(saved);
+  await start();
+  const { contexts, pages } = await group(browser, sessions);
+  try {
+    await resumed(pages);
+    const actor = pages[0];
+    const future = actor.getByRole("region", { name: "Sắp tương lai" });
+    await expect(future).toBeVisible();
+    for (const page of [pages[1], pages[2]]) {
+      expect((await view(page)).game!.futureCards).toEqual([]);
+      await expect(
+        page.getByRole("region", { name: "Sắp tương lai" }),
+      ).toHaveCount(0);
+    }
+    await actor.getByRole("button", { name: "Đưa Favor lên trước" }).click();
+    await actor.getByRole("button", { name: "Đưa Favor lên trước" }).click();
+    await expect(future.locator(".table-card strong")).toHaveText([
+      "Favor",
+      "Defuse",
+      "Skip",
+    ]);
+    expect((await view(actor)).game!.futureCards).toEqual(top);
+    expect(
+      await actor.evaluate(
+        () => (window as unknown as TestWindow).wire.commands,
+      ),
+    ).toEqual([]);
+    for (const width of [1280, 390, 320]) {
+      await actor.setViewportSize({ width, height: 900 });
+      expect(
+        await actor.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await future.screenshot({
+        path: resolve(".amp/in/artifacts/mixed-alter-" + width + ".png"),
+        animations: "disabled",
+      });
+    }
+    expect((await command(pages[1], { type: "leave" })).ok).toBe(true);
+    await expect(
+      future.getByRole("button", { name: "Xác nhận thứ tự" }),
+    ).toBeEnabled();
+    const timer = actor.getByRole("timer", {
+      name: "Thời gian không hoạt động",
+    });
+    const deadline = (await view(actor)).game!.idle!.deadline;
+    const ticking = await timer.textContent();
+    await expect(timer).not.toHaveText(ticking!);
+    expect((await view(actor)).game!.idle!.deadline).toBe(deadline);
+    await expect(
+      actor.getByRole("region", { name: "Người chơi mất kết nối" }),
+    ).toContainText("Ván vẫn tiếp tục");
+    await actor.screenshot({
+      path: resolve(".amp/in/artifacts/mixed-offline-alter-320.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await stop();
+    const durable = await readStored(saved.roomId);
+    expect(durable.pause).toBeNull();
+    expect(durable.idle!.deadline).toBe(deadline);
+    expect(durable.game!.drawPile.slice(0, 3)).toEqual(top);
+    await start();
+    await pages[1].getByRole("button", { name: "Quay lại ghế" }).click();
+    await resumed(pages);
+    await expect(
+      future.getByRole("button", { name: "Xác nhận thứ tự" }),
+    ).toBeEnabled();
+    expect((await view(actor)).game!.idle!.deadline).toBe(deadline);
+    await future.getByRole("button", { name: "Xác nhận thứ tự" }).click();
+    await expect
+      .poll(async () => (await view(actor)).game!.phase.kind)
+      .toBe("turn");
+    const sent = await actor.evaluate(() =>
+      (window as unknown as TestWindow).wire.commands.at(-1)!,
+    );
+    expect(sent.action).toEqual({ type: "reorder_future", order: [2, 0, 1] });
+    expect(
+      (
+        await command(actor, sent.action, {
+          id: sent.id,
+          version: sent.version,
+        })
+      ).ok,
+    ).toBe(true);
+    const publicView = (await (
+      await request.get("/api/rooms/" + saved.roomId)
+    ).json()) as RoomSnapshot;
+    expect(publicView.game!.futureCards).toEqual([]);
+    expect(JSON.stringify(publicView)).not.toMatch(/drawPile|order/);
+    await stop();
+    expect((await readStored(saved.roomId)).game!.drawPile.slice(0, 3)).toEqual(
+      [top[2], top[0], top[1]],
+    );
+    await start();
+    await resumed(pages);
+    expect((await command(actor, { type: "draw" })).ok).toBe(true);
+    expect((await view(actor)).game!.hand.at(-1)).toEqual(top[2]);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+for (const type of ["reverse", "draw_bottom"] as const) {
+  test("lá mở rộng qua UI và Worker: " + type, async ({ browser, request }) => {
+    const { sessions, saved } = await prepare(request, "turn");
+    const room = new Room(saved);
+    const game = room.state.game!;
+    const hand = game.players[0].hand;
+    const newTypes = ["alter_future", "reverse", "draw_bottom"] as const;
+    for (const needed of newTypes) {
+      if (hand.some((card) => card.type === needed)) continue;
+      const source = [
+        game.drawPile,
+        ...game.players.slice(1).map((player) => player.hand),
+      ].find((cards) => cards.some((card) => card.type === needed))!;
+      const found = source.findIndex((card) => card.type === needed);
+      const spare = hand.findIndex(
+        (card) => ![...newTypes, "defuse"].some((kept) => kept === card.type),
+      );
+      [hand[spare], source[found]] = [source[found], hand[spare]];
+    }
+    const card = hand.find((card) => card.type === type)!;
+    game.turn.remaining = 1;
+    if (type === "draw_bottom") {
+      const bottom = game.drawPile.findIndex(
+        (card) => card.type !== "exploding_kitten",
+      );
+      [game.drawPile[bottom], game.drawPile[game.drawPile.length - 1]] = [
+        game.drawPile[game.drawPile.length - 1],
+        game.drawPile[bottom],
+      ];
+    }
+    const expectedBottom = game.drawPile.at(-1)!;
+    await writeStored(room.state);
+    await start();
+    const { contexts, pages } = await group(browser, sessions);
+    try {
+      await resumed(pages);
+      const actor = pages[0];
+      if (type === "reverse") {
+        for (const width of [1280, 390]) {
+          await actor.setViewportSize({ width, height: 900 });
+          if (width === 390)
+            await actor
+              .locator('.hand .card[data-type="draw_bottom"]')
+              .scrollIntoViewIfNeeded();
+          await actor.screenshot({
+            path: resolve(".amp/in/artifacts/mixed-default-" + width + ".png"),
+            fullPage: true,
+          });
+        }
+      }
+      await actor
+        .locator('.hand .card[data-card-id="' + card.id + '"]')
+        .click();
+      await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
+      await expect(
+        actor.getByRole("region", { name: "Phản ứng Nope" }),
+      ).toBeVisible();
+      expect(
+        (await view(actor)).game!.reaction!.deadline - Date.now(),
+      ).toBeGreaterThan(3000);
+      for (const page of pages)
+        expect((await command(page, { type: "pass" })).ok).toBe(true);
+      if (type === "reverse") {
+        for (const page of pages) {
+          expect((await view(page)).game!.direction).toBe(-1);
+          expect((await view(page)).game!.turn.playerId).toBe(
+            sessions[2].playerId,
+          );
+        }
+        await expect(actor.locator(".turn-details")).toContainText(
+          "Chiều đảo · Tiếp theo: Minh",
+        );
+        await actor.screenshot({
+          path: resolve(".amp/in/artifacts/mixed-reverse-390.png"),
+          fullPage: true,
+          animations: "disabled",
+        });
+      } else {
+        expect((await view(actor)).game!.hand.at(-1)).toEqual(expectedBottom);
+        expect((await view(actor)).game!.drawCount).toBe(
+          game.drawPile.length - 1,
+        );
+        expect((await view(actor)).game!.turn.playerId).toBe(
+          sessions[1].playerId,
+        );
+      }
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
+  });
+}
+
+test("alarm 60 giây thật tự rút dù heartbeat đều; không rút lần hai", async ({
+  browser,
+  request,
+}) => {
+  test.setTimeout(120000);
+  const { sessions, saved } = await prepare(request, "turn");
+  const game = saved.game!;
+  const safe = game.drawPile.findIndex(
+    (card) => card.type !== "exploding_kitten",
+  );
+  [game.drawPile[0], game.drawPile[safe]] = [
+    game.drawPile[safe],
+    game.drawPile[0],
+  ];
+  const expected = game.drawPile[0];
+  game.turn.remaining = 1;
+  game.direction = -1;
+  saved.idle!.deadline = Date.now() + 60000;
+  await writeStored(saved);
+  await start();
+  const { contexts, pages } = await group(browser, sessions);
+  try {
+    await resumed(pages);
+    const actor = pages[0];
+    const deadline = (await view(actor)).game!.idle!.deadline;
+    expect(deadline - Date.now()).toBeGreaterThan(55000);
+    await actor.waitForTimeout(12000);
+    expect((await view(actor)).game!.idle!.deadline).toBe(deadline);
+    expect((await view(actor)).game!.drawCount).toBe(game.drawPile.length);
+    await expect
+      .poll(async () => (await view(actor)).game!.drawCount, {
+        timeout: 75000,
+        intervals: [1000],
+      })
+      .toBe(game.drawPile.length - 1);
+    const after = await view(actor);
+    expect(after.pause).toBeNull();
+    expect(after.game!.hand.at(-1)).toEqual(expected);
+    expect(after.game!.turn.playerId).toBe(sessions[2].playerId);
+    expect(after.game!.idle!.playerId).toBe(sessions[2].playerId);
+    await actor.waitForTimeout(1200);
+    expect((await view(actor)).game!.drawCount).toBe(game.drawPile.length - 1);
+    for (const page of [pages[1], pages[2]])
+      expect(JSON.stringify(await view(page))).not.toContain(
+        '"' + expected.id + '"',
+      );
+    await stop();
+    expect(
+      (await readStored(saved.roomId)).game!.players[0].hand.at(-1),
+    ).toEqual(expected);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 for (const drawsBomb of [false, true]) {
   test(
     "rút bài xóa lựa chọn khi " +
@@ -361,7 +629,7 @@ for (const drawsBomb of [false, true]) {
         await cards.nth(0).click();
         await cards.nth(1).click();
         await actor
-          .getByLabel("Mục tiêu (Xin Bài / combo)")
+          .getByLabel("Mục tiêu (Favor / combo)")
           .selectOption(sessions[1].playerId);
         await expect(
           actor.locator('.hand .card[aria-pressed="true"]'),
@@ -387,9 +655,13 @@ for (const drawsBomb of [false, true]) {
           drawsBomb ? 3 : 2,
         );
         for (const page of pages) {
-          const banner = page.getByRole("alert", { name: "Trạng thái Mèo Nổ" });
+          const banner = page.getByRole("alert", {
+            name: "Trạng thái Exploding Kitten",
+          });
           if (drawsBomb) {
-            await expect(banner).toContainText("Thảo rút trúng Mèo Nổ!");
+            await expect(banner).toContainText(
+              "Thảo rút trúng Exploding Kitten!",
+            );
             await expect(
               page.locator('[data-player-id="' + sessions[0].playerId + '"]'),
             ).toContainText("Đang gỡ bom");
@@ -412,9 +684,9 @@ for (const drawsBomb of [false, true]) {
         ).toHaveCount(0);
         await expect(actor.locator(".hand .card.selected")).toHaveCount(0);
         await expect(actor.locator(".card-help")).toHaveCount(0);
-        await expect(
-          actor.getByLabel("Mục tiêu (Xin Bài / combo)"),
-        ).toHaveCount(0);
+        await expect(actor.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
+          0,
+        );
         await actor.screenshot({
           path: testInfo.outputPath("draw-selected-after.png"),
           fullPage: true,
@@ -475,7 +747,7 @@ for (const finishes of [false, true]) {
         );
         for (const page of pages) {
           await expect(
-            page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+            page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
           ).toContainText("Thảo đã nổ và bị loại!");
           const eliminatedSeat = page.locator(
             '[data-player-id="' + sessions[0].playerId + '"]',
@@ -566,7 +838,7 @@ for (const finishes of [false, true]) {
         for (const page of pages) {
           expect((await view(page)).lastBomb).toEqual(before.lastBomb);
           await expect(
-            page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+            page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
           ).toContainText("Thảo đã nổ và bị loại!");
           await expect(page.locator(".player-seat.is-winner")).toHaveCount(
             finishes ? 1 : 0,
@@ -614,6 +886,31 @@ for (const finishes of [false, true]) {
             fullPage: true,
             animations: "disabled",
           });
+        }
+        if (!finishes) {
+          const ongoing = (await view(pages[1])).game!;
+          expect((await command(pages[0], { type: "leave" })).ok).toBe(true);
+          await expect
+            .poll(async () => (await view(pages[1])).members[0].connected)
+            .toBe(false);
+          expect((await view(pages[1])).game).toEqual(ongoing);
+          await expect(
+            pages[1].getByRole("region", { name: "Người chơi mất kết nối" }),
+          ).toHaveCount(0);
+          await expect(
+            pages[1].locator(
+              '[data-player-id="' + sessions[0].playerId + '"] small',
+            ),
+          ).toContainText("Đã nổ · Bị loại");
+          await pages[1].screenshot({
+            path: resolve(".amp/in/artifacts/eliminated-offline-320.png"),
+            fullPage: true,
+            animations: "disabled",
+          });
+          expect((await command(pages[1], { type: "draw" })).ok).toBe(true);
+          expect((await view(pages[1])).game!.drawCount).toBe(
+            ongoing.drawCount - 1,
+          );
         }
       } finally {
         await Promise.all(contexts.map((context) => context.close()));
@@ -664,8 +961,8 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
             .click();
           for (const page of pages)
             await expect(
-              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
-            ).toContainText("Thảo rút trúng Mèo Nổ!");
+              page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
+            ).toContainText("Thảo rút trúng Exploding Kitten!");
         }
         await stop();
         const durable = await readStored(saved.roomId);
@@ -679,12 +976,15 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
         for (const [index, page] of pages.entries()) {
           const after = await view(page);
           expect(after.gameId).toBe(saved.gameId);
-          expect(after.game).toEqual(before[index].game);
+          const { idle: beforeIdle, ...beforeGame } = before[index].game!;
+          const { idle: afterIdle, ...afterGame } = after.game!;
+          expect(afterGame).toEqual(beforeGame);
+          expect(afterIdle).toEqual(beforeIdle);
           expect(after.lastPlay).toEqual(before[index].lastPlay);
           expect(after.lastBomb).toEqual(before[index].lastBomb);
           if (phase === "favor")
             await expect(page.getByTestId("last-play")).toHaveText(
-              "Thảo vừa đánh Xin Bài nhắm vào Minh",
+              "Thảo vừa đánh Favor nhắm vào Minh",
             );
           await expect(page.locator(".card-arriving")).toHaveCount(0);
           expect(await page.evaluate(() => performance.timeOrigin)).toBe(
@@ -700,8 +1000,8 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           ).toHaveAttribute("aria-pressed", "true");
           for (const page of pages)
             await expect(
-              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
-            ).toContainText("Thảo rút trúng Mèo Nổ!");
+              page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
+            ).toContainText("Thảo rút trúng Exploding Kitten!");
           for (const page of [pages[1], pages[2]])
             await expect(
               page.getByRole("region", { name: "Cài bom kín" }),
@@ -798,7 +1098,7 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
               page.getByRole("alert", { name: "Bạn đang bị nhắm tới" }),
             ).toHaveCount(0);
             await expect(page.getByTestId("last-play")).toHaveText(
-              "Thảo vừa đánh Xin Bài nhắm vào Minh",
+              "Thảo vừa đánh Favor nhắm vào Minh",
             );
           }
           await expect(
@@ -827,7 +1127,7 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
           });
           for (const page of pages) {
             await expect(
-              page.getByRole("alert", { name: "Trạng thái Mèo Nổ" }),
+              page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
             ).toContainText("Thảo đã gỡ bom an toàn");
             const snapshot = await view(page);
             expect(snapshot.lastBomb?.outcome).toBe("defused");
@@ -892,11 +1192,15 @@ for (const phase of ["turn", "favor", "future", "defuse"] as const) {
   );
 }
 
-test("Nope giữ thời gian qua pause, downtime và tab thay thế; không chốt khi thiếu người", async ({
+test("Nope chốt đúng hạn qua downtime dù thiếu người; quay lại nhận trạng thái mới", async ({
   browser,
   request,
 }, testInfo) => {
   const { sessions, saved } = await prepare(request, "reaction");
+  const pile = saved.game!.drawPile;
+  const safe = pile.findIndex((card) => card.type !== "exploding_kitten");
+  [pile[0], pile[safe]] = [pile[safe], pile[0]];
+  await writeStored(saved);
   await start();
   const { contexts, pages } = await group(browser, sessions);
   try {
@@ -907,16 +1211,18 @@ test("Nope giữ thời gian qua pause, downtime và tab thay thế; không ch�
       pages[2].getByRole("button", { name: "Quay lại ghế" }),
     ).toBeVisible();
     await expect
-      .poll(async () => (await view(pages[0])).pause?.missingIds)
-      .toEqual([sessions[2].playerId]);
-    const frozen = await view(pages[0]);
-    expect(frozen.pause!.remainingNopeMs).toBeGreaterThan(0);
+      .poll(async () => (await view(pages[0])).members[2].connected)
+      .toBe(false);
+    const before = await view(pages[0]);
+    expect(before.pause).toBeNull();
+    expect(before.game!.reaction!.deadline).toBe(saved.reaction!.deadline);
+    expect(before.game!.reaction!.passedIds).toEqual([sessions[1].playerId]);
     expect((await command(pages[0], { type: "draw" })).code).toBe(
-      "GAME_PAUSED",
+      "ACTION_PENDING",
     );
     await stop();
     const durable = await readStored(saved.roomId);
-    expect(durable.pause!.remainingNopeMs).toBe(frozen.pause!.remainingNopeMs);
+    expect(durable.reaction).toEqual(before.game!.reaction);
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 6100));
     await start();
     for (const page of pages.slice(0, 2))
@@ -930,36 +1236,26 @@ test("Nope giữ thời gian qua pause, downtime và tab thay thế; không ch�
           .every((member) => member.connected),
       )
       .toBe(true);
-    const paused = await view(pages[0]);
-    expect(paused.game).toEqual(frozen.game);
-    expect(paused.lastPlay).toEqual(frozen.lastPlay);
-    expect(paused.pause!.remainingNopeMs).toBe(frozen.pause!.remainingNopeMs);
-    expect(paused.hostId).toBe(sessions[0].playerId);
+    await expect
+      .poll(async () => (await view(pages[0])).game!.phase.kind)
+      .toBe("turn");
+    const settled = await view(pages[0]);
+    expect(settled.lastPlay).toEqual(before.lastPlay);
+    expect(settled.hostId).toBe(sessions[0].playerId);
+    expect(settled.game!.reaction).toBeNull();
+    expect(settled.game!.turn).toEqual({
+      playerId: sessions[0].playerId,
+      remaining: 2,
+      attacked: true,
+    });
+    expect(settled.game!.discardPile).toHaveLength(1);
+    expect(settled.members[2].connected).toBe(false);
     await expect(
-      pages[1].getByRole("region", { name: "Ván tạm dừng" }),
-    ).toContainText("Chờ An");
+      pages[1].getByRole("region", { name: "Người chơi mất kết nối" }),
+    ).toContainText("An đang mất kết nối");
     await expect(
       pages[0].getByRole("button", { name: "Rút bài", exact: true }),
-    ).toBeDisabled();
-    await pages[0].getByLabel("Tùy chọn phòng").click();
-    await expect(
-      pages[0].getByRole("button", { name: "Hủy ván về phòng chờ" }),
     ).toBeEnabled();
-    await pages[1].screenshot({
-      path: testInfo.outputPath("phase-3-paused-mobile.png"),
-      fullPage: true,
-    });
-    await pages[0].screenshot({
-      path: testInfo.outputPath("phase-3-paused-desktop.png"),
-      fullPage: true,
-    });
-    await pages[2].getByRole("button", { name: "Quay lại ghế" }).click();
-    await resumed(pages);
-    const active = await view(pages[0]);
-    expect(active.game!.reaction!.passedIds).toEqual([sessions[1].playerId]);
-    expect(active.game!.reaction!.deadline).toBeGreaterThan(
-      frozen.game!.reaction!.deadline + 6000,
-    );
     const replacement = await contexts[1].newPage();
     await replacement.goto(pages[1].url());
     await expect(
@@ -969,35 +1265,31 @@ test("Nope giữ thời gian qua pause, downtime và tab thay thế; không ch�
       pages[1].getByRole("status", { name: "Trạng thái kết nối" }),
     ).toHaveText("Đã ngừng điều khiển");
     expect((await view(replacement)).pause).toBeNull();
-    expect((await view(replacement)).game!.reaction!.deadline).toBe(
-      active.game!.reaction!.deadline,
+    expect((await view(replacement)).game!.idle!.deadline).toBe(
+      settled.game!.idle!.deadline,
     );
-    await expect
-      .poll(async () => (await view(pages[0])).game!.phase.kind, {
-        timeout: 7000,
-      })
-      .toBe("turn");
-    const settled = await view(pages[0]);
-    expect(settled.game!.turn).toEqual({
-      playerId: sessions[0].playerId,
-      remaining: 2,
-      attacked: true,
-    });
-    expect(settled.game!.discardPile).toHaveLength(1);
+    expect((await command(pages[0], { type: "draw" })).ok).toBe(true);
+    expect((await view(pages[0])).game!.hand.at(-1)).toEqual(
+      saved.game!.drawPile[0],
+    );
+    expect((await view(pages[0])).game!.turn.remaining).toBe(1);
     expect((await command(pages[0], { type: "pass" })).ok).toBe(false);
-    expect((await view(pages[0])).game!.turn.remaining).toBe(2);
+    await pages[2].getByRole("button", { name: "Quay lại ghế" }).click();
+    await resumed([pages[0], replacement, pages[2]]);
+    expect((await view(pages[2])).game!.turn.remaining).toBe(1);
+    expect((await view(pages[2])).game!.drawCount).toBe(
+      saved.game!.drawPile.length - 1,
+    );
     await writeFile(
-      testInfo.outputPath("pause-evidence.json"),
+      testInfo.outputPath("offline-nope-evidence.json"),
       JSON.stringify(
         {
-          frozenMs: frozen.pause!.remainingNopeMs,
           downtimeMs: 6100,
           hostRetained: true,
-          allAliveRequired: true,
-          passedRetained: true,
-          deadlineBefore: frozen.game!.reaction!.deadline,
-          deadlineAfter: active.game!.reaction!.deadline,
-          remainingDebtAfter: 2,
+          settledWhileOffline: true,
+          deadlineBefore: before.game!.reaction!.deadline,
+          restoredIdleDeadline: settled.game!.idle!.deadline,
+          remainingDebtAfter: 1,
         },
         null,
         2,
@@ -1180,37 +1472,53 @@ test("lỗi ghi SQLite rollback cả state và ACK; cùng ID có thể thử l�
   }
 });
 
-test("alarm phát hiện tab ngừng JavaScript sau 25 giây; quay lại nối mới, không gia hạn bởi heartbeat", async ({
+test("offline sau 25 giây vẫn tự rút ở hạn 60 giây; người khác chơi và quay lại đồng bộ", async ({
   browser,
   request,
 }, testInfo) => {
+  test.setTimeout(120000);
   const { sessions, saved } = await prepare(request, "turn");
+  const game = saved.game!;
+  for (const index of [0, 1]) {
+    const safe = game.drawPile.findIndex(
+      (card, position) => position >= index && card.type !== "exploding_kitten",
+    );
+    [game.drawPile[index], game.drawPile[safe]] = [
+      game.drawPile[safe],
+      game.drawPile[index],
+    ];
+  }
+  const expected = game.drawPile.slice(0, 2);
+  game.turn.remaining = 1;
+  saved.idle!.deadline = Date.now() + 60000;
+  await writeStored(saved);
   await start();
   const { contexts, pages } = await group(browser, sessions);
-  const suspended = await contexts[2].newCDPSession(pages[2]);
+  const suspended = await contexts[0].newCDPSession(pages[0]);
   try {
     await resumed(pages);
-    const active = await view(pages[0]);
-    const timeOrigin = await pages[2].evaluate(() => performance.timeOrigin);
+    const active = await view(pages[1]);
+    const timeOrigin = await pages[0].evaluate(() => performance.timeOrigin);
     await suspended.send("Emulation.setScriptExecutionDisabled", {
       value: true,
     });
     const connectedAt = Date.now();
     await expect
-      .poll(async () => (await view(pages[0])).pause?.missingIds, {
+      .poll(async () => (await view(pages[1])).members[0].connected, {
         timeout: 30000,
       })
-      .toEqual([sessions[2].playerId]);
+      .toBe(false);
     expect(Date.now() - connectedAt).toBeGreaterThan(
       CONNECTION_TIMEOUT_MS - 500,
     );
-    const paused = await view(pages[0]);
-    expect(paused.hostId).toBe(sessions[0].playerId);
-    expect(paused.game).toEqual(active.game);
-    expect(paused.members.slice(0, 2).every((member) => member.connected)).toBe(
+    const offline = await view(pages[1]);
+    expect(offline.pause).toBeNull();
+    expect(offline.hostId).toBe(sessions[0].playerId);
+    expect(offline.game).toEqual(active.game);
+    expect(offline.members.slice(1).every((member) => member.connected)).toBe(
       true,
     );
-    for (const online of pages.slice(0, 2))
+    for (const online of pages.slice(1))
       expect(
         await online.evaluate(
           () =>
@@ -1219,32 +1527,81 @@ test("alarm phát hiện tab ngừng JavaScript sau 25 giây; quay lại nối m
             ).length,
         ),
       ).toBeGreaterThanOrEqual(3);
-    await pages[1].screenshot({
-      path: testInfo.outputPath("phase-3-heartbeat-pause.png"),
-      fullPage: true,
+    const timer = pages[1].getByRole("timer", {
+      name: "Thời gian không hoạt động",
     });
+    const ticking = await timer.textContent();
+    await expect(timer).not.toHaveText(ticking!);
+    await expect(
+      pages[1].getByRole("region", { name: "Người chơi mất kết nối" }),
+    ).toContainText("Thảo đang mất kết nối");
+    for (const width of [1280, 390, 320]) {
+      await pages[1].setViewportSize({ width, height: 900 });
+      expect(
+        await pages[1].evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await pages[1].screenshot({
+        path: resolve(".amp/in/artifacts/offline-running-" + width + ".png"),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await expect
+      .poll(async () => (await view(pages[1])).game!.drawCount, {
+        timeout: 45000,
+        intervals: [1000],
+      })
+      .toBe(game.drawPile.length - 1);
+    const autoDrawn = await view(pages[1]);
+    expect(autoDrawn.game!.turn.playerId).toBe(sessions[1].playerId);
+    expect(autoDrawn.members[0].cardCount).toBe(
+      game.players[0].hand.length + 1,
+    );
+    expect(JSON.stringify(autoDrawn)).not.toContain('"' + expected[0].id + '"');
+    await pages[1].waitForTimeout(1100);
+    expect((await view(pages[1])).game!.drawCount).toBe(
+      game.drawPile.length - 1,
+    );
+    expect((await command(pages[1], { type: "draw" })).ok).toBe(true);
+    const continued = await view(pages[1]);
+    expect(continued.game!.hand.at(-1)).toEqual(expected[1]);
+    expect(continued.game!.turn.playerId).toBe(sessions[2].playerId);
     const returnedAt = Date.now();
     await suspended.send("Emulation.setScriptExecutionDisabled", {
       value: false,
     });
-    await pages[2].evaluate(() =>
+    await pages[0].evaluate(() =>
       document.dispatchEvent(new Event("visibilitychange")),
     );
-    await resumed(pages, paused.version + 1);
-    expect((await view(pages[0])).game).toEqual(active.game);
-    expect((await view(pages[2])).game!.hand).toEqual(
-      saved.game!.players[2].hand,
-    );
-    expect(await pages[2].evaluate(() => performance.timeOrigin)).toBe(
+    await resumed(pages, continued.version + 1);
+    const after = (await view(pages[0])).game!;
+    expect(after.turn).toEqual(continued.game!.turn);
+    expect(after.idle).toEqual(continued.game!.idle);
+    expect(after.drawCount).toBe(game.drawPile.length - 2);
+    expect(after.hand).toEqual([...game.players[0].hand, expected[0]]);
+    expect(await pages[0].evaluate(() => performance.timeOrigin)).toBe(
       timeOrigin,
     );
     await stop();
     const durable = await readStored(saved.roomId);
-    expect(durable.members[0].lastSeen!).toBeLessThanOrEqual(connectedAt);
-    expect(durable.members[1].lastSeen!).toBeLessThanOrEqual(connectedAt);
-    expect(durable.lastActivity).toBe(durable.members[2].lastSeen);
     expect(durable.lastActivity).toBeGreaterThanOrEqual(returnedAt);
-    expect(durable.game).toEqual(saved.game);
+    expect(durable.game!.players[0].hand).toEqual(after.hand);
+    expect(durable.idle).toEqual(after.idle);
+    await writeFile(
+      testInfo.outputPath("offline-evidence.json"),
+      JSON.stringify(
+        {
+          deadline: active.game!.idle!.deadline,
+          autoDrawnWhileOffline: true,
+          nextPlayerActedWhileOffline: true,
+          reconnectKeptDeadline: true,
+        },
+        null,
+        2,
+      ),
+    );
   } finally {
     await suspended.send("Emulation.setScriptExecutionDisabled", {
       value: false,
@@ -1297,11 +1654,11 @@ for (const count of [2, 3]) {
       try {
         await resumed(pages);
         await pages[1].emulateMedia({ reducedMotion: "reduce" });
-        const cards = pages[0].getByRole("button", { name: /Mèo Taco/ });
+        const cards = pages[0].getByRole("button", { name: /Tacocat/ });
         for (let index = 0; index < count; index++)
           await cards.nth(index).click();
         await pages[0]
-          .getByLabel("Mục tiêu (Xin Bài / combo)")
+          .getByLabel("Mục tiêu (Favor / combo)")
           .selectOption(sessions[1].playerId);
         if (count === 3)
           await pages[0].getByLabel("Loại bài gọi tên").selectOption("defuse");
@@ -1323,7 +1680,7 @@ for (const count of [2, 3]) {
             page.getByTestId("public-cards").locator(".table-card"),
           ).toHaveCount(count);
           await expect(page.getByTestId("last-play")).toHaveText(
-            "Thảo vừa đánh combo " + count + " lá Mèo Taco nhắm vào Minh",
+            "Thảo vừa đánh combo " + count + " lá Tacocat nhắm vào Minh",
           );
           expect((await view(page)).lastPlay).toMatchObject({
             playerId: sessions[0].playerId,
@@ -1366,7 +1723,7 @@ for (const count of [2, 3]) {
             page.getByTestId("public-cards").locator(".table-card"),
           ).toHaveCount(1);
           await expect(page.getByTestId("last-play")).toHaveText(
-            "Minh vừa đánh Chặn — Nope",
+            "Minh vừa đánh Nope",
           );
           expect((await view(page)).lastPlay).toMatchObject({
             playerId: sessions[1].playerId,
@@ -1390,7 +1747,7 @@ for (const count of [2, 3]) {
         await resumed(pages);
         expect((await view(pages[2])).lastPlay).toEqual(latest);
         await expect(pages[2].getByTestId("last-play")).toHaveText(
-          "Minh vừa đánh Chặn — Nope",
+          "Minh vừa đánh Nope",
         );
         await expect(pages[2].locator(".card-arriving")).toHaveCount(0);
       } finally {
@@ -1481,9 +1838,9 @@ for (const reclaimedType of ["defuse", "exploding_kitten"] as const) {
           exact: true,
         });
         await expect(play).toBeDisabled();
-        await expect(
-          actor.getByLabel("Mục tiêu (Xin Bài / combo)"),
-        ).toHaveCount(0);
+        await expect(actor.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
+          0,
+        );
         const discard = actor.getByLabel("Lá bài bỏ muốn lấy");
         const publicCardId = (await view(actor)).game!.discardPile[1].id;
         await discard.selectOption(publicCardId);
@@ -1678,13 +2035,13 @@ for (const scenario of [
           .locator(".table-hand")
           .screenshot({ path: testInfo.outputPath("sorted-hand-before.png") });
         const cats = actor.getByRole("button", {
-          name: "LÁ BÀI Mèo Taco",
+          name: "LÁ BÀI Tacocat",
           exact: true,
         });
         for (let index = 0; index < scenario.count; index++)
           await cats.nth(index).click();
         await actor
-          .getByLabel("Mục tiêu (Xin Bài / combo)")
+          .getByLabel("Mục tiêu (Favor / combo)")
           .selectOption(sessions[1].playerId);
         if (scenario.count === 3)
           await actor
@@ -1728,10 +2085,10 @@ for (const scenario of [
         };
         const messages = [
           scenario.succeeds
-            ? "Bạn vừa lấy Mèo Râu từ Minh."
+            ? "Bạn vừa lấy Beard Cat từ Minh."
             : "Bạn không lấy được lá nào từ Minh.",
           scenario.succeeds
-            ? "Thảo vừa lấy Mèo Râu của bạn."
+            ? "Thảo vừa lấy Beard Cat của bạn."
             : "Thảo không lấy được lá nào của bạn.",
         ];
         for (const [index, message] of messages.entries()) {
@@ -1873,11 +2230,11 @@ test("Attack qua Worker luôn chuyển 2 lượt, kể cả sau rút một lư�
       }
       const actor = pages[index % 3];
       await actor
-        .getByRole("button", { name: "LÁ BÀI Tấn Công", exact: true })
+        .getByRole("button", { name: "LÁ BÀI Attack", exact: true })
         .first()
         .click();
       await expect(actor.locator(".card-help")).toHaveText(
-        "Tấn Công — Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
+        "Attack — Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
       );
       await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
       await expect
@@ -2124,7 +2481,7 @@ test("chủ rời giữ ghế và chuyển quyền, hủy/tái đấu rồi chơ
     expect((await command(pages[1], { type: "start" })).ok).toBe(true);
     await expect
       .poll(async () => (await view(pages[1])).game!.drawCount)
-      .toBe(34);
+      .toBe(60);
     expect((await view(pages[1])).gameId).not.toBe(nextId);
     for (const page of pages) {
       await expect(

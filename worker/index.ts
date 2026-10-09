@@ -154,10 +154,13 @@ export class GameRoom extends DurableObject<Env> {
         const result = operation();
         if (JSON.stringify(before) !== JSON.stringify(this.room?.state ?? null))
           this.save();
-        if (this.room)
-          await this.ctx.storage.setAlarm(
-            this.room.nextAlarm(this.connectionTimes()),
-          );
+        if (this.room) {
+          const scheduled = await this.ctx.storage.getAlarm();
+          const next = this.room.nextAlarm(this.connectionTimes());
+          // Moving an existing alarm later during wake-up can cancel its handler and broadcast.
+          if (scheduled === null || next < scheduled)
+            await this.ctx.storage.setAlarm(next);
+        }
         return result;
       });
     } catch (error) {
@@ -478,11 +481,7 @@ export class GameRoom extends DurableObject<Env> {
     return this.serial(async () => {
       const attachment = socket.deserializeAttachment() as Attachment;
       await this.mutate(() =>
-        this.room?.disconnect(
-          attachment.playerId,
-          attachment.connectionId,
-          Date.now(),
-        ),
+        this.room?.disconnect(attachment.playerId, attachment.connectionId),
       );
       if (
         socket.readyState === WebSocket.OPEN ||

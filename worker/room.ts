@@ -9,6 +9,7 @@ import {
 } from "../shared/engine";
 import {
   NOPE_WINDOW_MS,
+  TURN_IDLE_MS,
   CONNECTION_TIMEOUT_MS,
   ROOM_TTL_MS,
   errorMessage,
@@ -30,10 +31,19 @@ export type Member = {
 };
 export type RoomState = {
   schemaVersion: 1;
-  rulesVersion: "original-2022" | "original-2022-long" | "original-2022-scaled";
+  rulesVersion:
+    | "original-2022"
+    | "original-2022-long"
+    | "original-2022-scaled"
+    | "original-2022-mixed";
   gameId: string | null;
   lastActivity: number;
-  pause: null | { since: number; remainingNopeMs: number | null };
+  pause: null | {
+    since: number;
+    remainingNopeMs: number | null;
+    remainingIdleMs?: number | null;
+  };
+  idle: null | { playerId: string; deadline: number };
   roomId: string;
   version: number;
   capacity: Capacity;
@@ -114,6 +124,18 @@ export function parseCommand(value: unknown): ClientCommand {
         throw new Error("INVALID_COMMAND");
       parsed = { type: action.type, cardId: action.cardId };
       break;
+    case "reorder_future":
+      if (
+        !fields(action, ["type", "order"]) ||
+        !Array.isArray(action.order) ||
+        action.order.length > 3 ||
+        !action.order.every(
+          (index) => Number.isSafeInteger(index) && index >= 0 && index < 3,
+        )
+      )
+        throw new Error("INVALID_COMMAND");
+      parsed = { type: "reorder_future", order: action.order };
+      break;
     case "insert_bomb":
       if (
         !fields(action, ["type", "position"]) ||
@@ -191,6 +213,7 @@ type LegacyRoomState = Omit<
   | "lastActivity"
   | "hostTransferPending"
   | "pause"
+  | "idle"
   | "members"
 > & { members: Omit<Member, "lastSeen">[] };
 
@@ -205,6 +228,7 @@ export class Room {
           "original-2022",
           "original-2022-long",
           "original-2022-scaled",
+          "original-2022-mixed",
         ].includes(saved.rulesVersion))
     )
       throw new Error("UNSUPPORTED_SCHEMA");
@@ -220,7 +244,8 @@ export class Room {
             ? crypto.randomUUID()
             : null,
       lastActivity: "lastActivity" in saved ? saved.lastActivity : now,
-      pause: "pause" in saved ? saved.pause : null,
+      pause: null,
+      idle: "idle" in saved ? saved.idle : null,
       lastPlay: saved.lastPlay ?? null,
       lastBomb: saved.lastBomb ?? null,
       lastTransfer: saved.lastTransfer ?? null,
@@ -247,6 +272,21 @@ export class Room {
         ...this.state.game!,
         phase: { ...phase, lastNopePlayerId: this.state.lastPlay.playerId },
       };
+    }
+    if (!("idle" in saved)) this.resetIdle(now);
+    // Chuyển ván cũ đang đóng băng sang đồng hồ chạy, không chia lại hay xử lý bù.
+    const pause = "pause" in saved ? saved.pause : null;
+    if (pause) {
+      if (this.state.reaction)
+        this.state.reaction = {
+          ...this.state.reaction,
+          deadline: now + (pause.remainingNopeMs ?? 0),
+        };
+      if (this.state.idle)
+        this.state.idle = {
+          ...this.state.idle,
+          deadline: now + (pause.remainingIdleMs ?? TURN_IDLE_MS),
+        };
     }
   }
 
@@ -282,48 +322,16 @@ export class Room {
       this.state.hostTransferPending = false;
     }
     this.state.lastActivity = now;
-    this.updatePause(now);
     this.state.version++;
   }
 
-  disconnect(
-    playerId: string,
-    connectionId: string,
-    now = Date.now(),
-  ): boolean {
+  disconnect(playerId: string, connectionId: string): boolean {
     const member = this.state.members.find((member) => member.id === playerId);
     if (!member || member.connectionId !== connectionId) return false;
     member.connectionId = null;
     member.lastSeen = null;
-    this.updatePause(now);
     this.state.version++;
     return true;
-  }
-
-  private missingIds(): string[] {
-    return this.state.game?.phase.kind === "finished"
-      ? []
-      : (this.state.game?.players
-          .filter(
-            (player) => player.alive && !this.member(player.id).connectionId,
-          )
-          .map((player) => player.id) ?? []);
-  }
-
-  private updatePause(now: number): void {
-    if (this.missingIds().length) {
-      this.state.pause ??= {
-        since: now,
-        remainingNopeMs: this.state.reaction
-          ? Math.max(0, this.state.reaction.deadline - now)
-          : null,
-      };
-    } else if (this.state.pause) {
-      if (this.state.reaction)
-        this.state.reaction.deadline =
-          now + (this.state.pause.remainingNopeMs ?? 0);
-      this.state.pause = null;
-    }
   }
 
   reconcileConnections(connections: Map<string, number>, now: number): void {
@@ -331,17 +339,14 @@ export class Room {
       if (!member.connectionId) continue;
       const lastSeen = connections.get(member.connectionId);
       if (lastSeen === undefined || now >= lastSeen + CONNECTION_TIMEOUT_MS)
-        this.disconnect(member.id, member.connectionId, now);
+        this.disconnect(member.id, member.connectionId);
     }
-    const pause = this.state.pause;
-    this.updatePause(now);
-    if (pause !== this.state.pause) this.state.version++;
   }
 
   nextAlarm(connections: Map<string, number>): number {
     const deadlines = [this.state.lastActivity + ROOM_TTL_MS];
-    if (this.state.reaction && !this.state.pause)
-      deadlines.push(this.state.reaction.deadline);
+    if (this.state.reaction) deadlines.push(this.state.reaction.deadline);
+    if (this.state.idle) deadlines.push(this.state.idle.deadline);
     for (const member of this.state.members) {
       if (member.connectionId) {
         const lastSeen =
@@ -391,16 +396,91 @@ export class Room {
     }
     this.state.game = next;
     this.state.reaction = null;
+    if (
+      phase.kind === "reaction" &&
+      phase.nopeCount % 2 === 0 &&
+      phase.action.type === "draw_bottom" &&
+      game.drawPile.at(-1)?.type === "exploding_kitten"
+    ) {
+      this.state.lastBomb = {
+        id: this.state.version + 1,
+        playerId: phase.action.playerId,
+        outcome: next.phase.kind === "defuse" ? "defusing" : "exploded",
+      };
+    }
+  }
+
+  private resetIdle(now: number): void {
+    const game = this.state.game;
+    const phase = game?.phase;
+    this.state.idle =
+      !game || !phase || phase.kind === "reaction" || phase.kind === "finished"
+        ? null
+        : {
+            playerId:
+              phase.kind === "turn"
+                ? game.turn.playerId
+                : phase.kind === "favor"
+                  ? phase.targetId
+                  : phase.playerId,
+            deadline: now + TURN_IDLE_MS,
+          };
+    if (phase?.kind === "finished")
+      for (const member of this.state.members) member.ready = false;
   }
 
   expire(now: number, random: Random): boolean {
-    if (
-      this.state.pause ||
-      !this.state.reaction ||
-      now < this.state.reaction.deadline
-    )
-      return false;
-    this.settleReaction(random);
+    if (this.state.reaction && now >= this.state.reaction.deadline) {
+      this.settleReaction(random);
+    } else if (this.state.idle && now >= this.state.idle.deadline) {
+      const { playerId } = this.state.idle;
+      const game = this.state.game!;
+      switch (game.phase.kind) {
+        case "future":
+          this.execute(playerId, { type: "close_future" }, now, random);
+          this.execute(playerId, { type: "draw" }, now, random);
+          break;
+        case "alter_future":
+          this.execute(
+            playerId,
+            {
+              type: "reorder_future",
+              order: game.drawPile.slice(0, 3).map((_, index) => index),
+            },
+            now,
+            random,
+          );
+          this.execute(playerId, { type: "draw" }, now, random);
+          break;
+        case "favor": {
+          const hand = game.players.find(
+            (player) => player.id === playerId,
+          )!.hand;
+          this.execute(
+            playerId,
+            {
+              type: "give",
+              cardId: hand[Math.floor(random() * hand.length)].id,
+            },
+            now,
+            random,
+          );
+          break;
+        }
+        case "defuse":
+          this.execute(
+            playerId,
+            { type: "insert_bomb", position: "random" },
+            now,
+            random,
+          );
+          break;
+        case "turn":
+          this.execute(playerId, { type: "draw" }, now, random);
+          break;
+      }
+    } else return false;
+    this.resetIdle(now);
     this.state.version++;
     return true;
   }
@@ -427,18 +507,24 @@ export class Room {
         message: errorMessage("COMMAND_ID_REUSED"),
       };
     }
+    const hadReaction = this.state.reaction !== null;
     const expired = this.expire(now, random);
     let result: CommandResult;
     try {
-      if (expired && ["nope", "pass"].includes(command.action.type))
+      if (
+        expired &&
+        hadReaction &&
+        ["nope", "pass"].includes(command.action.type)
+      )
         throw new Error("DEADLINE_PASSED");
       if (command.version !== this.state.version)
         throw new Error("STALE_VERSION");
       this.execute(playerId, command.action, now, random);
+      // Rời ván không phải thao tác chơi và không được gia hạn lượt đang chạy.
+      if (command.action.type !== "leave" || !this.state.game)
+        this.resetIdle(now);
       this.state.lastActivity = now;
       if (member.connectionId) member.lastSeen = now;
-      if (this.state.game?.phase.kind === "finished")
-        for (const candidate of this.state.members) candidate.ready = false;
       this.state.version++;
       result = {
         type: "result",
@@ -470,8 +556,6 @@ export class Room {
     random: Random,
   ): void {
     const member = this.member(playerId);
-    if (this.state.pause && !["cancel_game", "leave"].includes(action.type))
-      throw new Error("GAME_PAUSED");
     switch (action.type) {
       case "cancel_game":
         this.host(playerId);
@@ -479,7 +563,6 @@ export class Room {
         this.state.game = null;
         this.state.gameId = null;
         this.state.reaction = null;
-        this.state.pause = null;
         this.state.hostTransferPending = false;
         this.state.lastPlay = null;
         this.state.lastBomb = null;
@@ -513,8 +596,7 @@ export class Room {
           random,
         );
         this.state.gameId = crypto.randomUUID();
-        this.state.rulesVersion =
-          this.state.capacity === 3 ? "original-2022" : "original-2022-scaled";
+        this.state.rulesVersion = "original-2022-mixed";
         this.state.lastPlay = null;
         this.state.lastBomb = null;
         this.state.lastTransfer = null;
@@ -529,7 +611,6 @@ export class Room {
         ) {
           member.connectionId = null;
           member.lastSeen = null;
-          this.updatePause(now);
           if (this.state.hostId === playerId) {
             const next = this.state.members.find(
               (candidate) => candidate.connectionId,
@@ -674,9 +755,7 @@ export class Room {
           state.lastTransfer.toId === playerId)
           ? state.lastTransfer
           : null,
-      pause: state.pause
-        ? { ...state.pause, missingIds: this.missingIds() }
-        : null,
+      pause: null,
       members: state.members.map((member) => {
         const player = game?.players.find((player) => player.id === member.id);
         return {
@@ -698,6 +777,8 @@ export class Room {
                 ? { id: "public-explosion-" + index, type: card.type }
                 : card,
             ),
+            direction: game.direction ?? 1,
+            idle: state.idle,
             turn: game.turn,
             phase:
               game.phase.kind === "defuse"

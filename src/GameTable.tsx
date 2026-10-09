@@ -11,14 +11,17 @@ import { CatMark } from "./Brand";
 import { CardFace, CARD_PATHS } from "./CardFace";
 
 const CARD_COPY: Record<CardType, string> = {
-  exploding_kitten: "Cần Gỡ Bom để sống sót.",
-  defuse: "Giữ lại để gỡ Mèo Nổ khi rút trúng.",
+  exploding_kitten: `Cần ${CARD_NAMES.defuse} để sống sót.`,
+  defuse: `Giữ lại để gỡ ${CARD_NAMES.exploding_kitten} khi rút trúng.`,
   attack:
     "Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
   skip: "Kết thúc một lượt mà không rút bài.",
   favor: "Chọn một người để họ cho bạn một lá.",
   shuffle: "Xáo chồng rút mà không xem bài.",
   see_future: "Xem kín tối đa 3 lá trên cùng.",
+  alter_future: "Xem kín và sắp lại tối đa 3 lá trên cùng, rồi tiếp tục lượt.",
+  reverse: "Đảo chiều chơi và kết thúc một lượt, không rút bài.",
+  draw_bottom: `Rút lá dưới cùng để kết thúc một lượt. Vẫn có thể gặp ${CARD_NAMES.exploding_kitten}.`,
   nope: "Chặn hành động đang chờ, kể cả Nope.",
   tacocat: "Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
   cattermelon: "Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
@@ -83,6 +86,7 @@ export function GameTable({
   const [requestedType, setRequestedType] = useState<CardType>("defuse");
   const [discardChoice, setDiscardChoice] = useState({ id: "", pile: "" });
   const [position, setPosition] = useState<number | "random">(0);
+  const [futureOrder, setFutureOrder] = useState<string[]>([]);
   const [animatedPlay, setAnimatedPlay] = useState<number | null>(null);
   const [dismissedTransfer, setDismissedTransfer] = useState<number | null>(
     null,
@@ -99,6 +103,9 @@ export function GameTable({
   useEffect(() => {
     setSelected([]);
   }, [game.drawCount]);
+  useEffect(() => {
+    setFutureOrder([]);
+  }, [phase.kind, snapshot.lastPlay?.id]);
   useEffect(() => {
     setSelected([]);
   }, [
@@ -189,9 +196,34 @@ export function GameTable({
   const selectedCard = game.hand.find((card) => card.id === selected.at(-1));
   const reactionMs = Math.max(
     0,
-    snapshot.pause?.remainingNopeMs ??
-      (game.reaction ? game.reaction.deadline - now : 0),
+    game.reaction ? game.reaction.deadline - now : 0,
   );
+  const idleMs = Math.max(0, game.idle ? game.idle.deadline - now : 0);
+  const offlineMembers = snapshot.members.filter(
+    (member) => member.alive && !member.connected,
+  );
+  const idleName = snapshot.members.find(
+    (member) => member.id === game.idle?.playerId,
+  )?.name;
+  const direction = game.direction ?? 1;
+  const turnSeat = snapshot.members.findIndex(
+    (member) => member.id === game.turn.playerId,
+  );
+  const nextMember = Array.from(
+    { length: snapshot.members.length - 1 },
+    (_, index) =>
+      snapshot.members[
+        (turnSeat + (index + 1) * direction + snapshot.members.length) %
+          snapshot.members.length
+      ],
+  ).find((member) => member.alive);
+  const orderedFuture =
+    futureOrder.length === game.futureCards.length &&
+    futureOrder.every((id) => game.futureCards.some((card) => card.id === id))
+      ? futureOrder.map((id) =>
+          game.futureCards.find((card) => card.id === id)!,
+        )
+      : game.futureCards;
   return (
     <>
       <h1 className="sr-only">Bàn chơi Mèo Nổ</h1>
@@ -210,6 +242,25 @@ export function GameTable({
                   : "")}
         </strong>
       </div>
+      {phase.kind !== "finished" && (
+        <div className="turn-details">
+          <span>
+            {direction === 1 ? "Chiều thuận" : "Chiều đảo"} · Tiếp theo:{" "}
+            {nextMember?.name}
+          </span>
+          {game.idle && (
+            <span role="timer" aria-label="Thời gian không hoạt động">
+              {idleName} · {Math.ceil(idleMs / 1000)} giây
+              {" — "}
+              {phase.kind === "favor"
+                ? "tự cho một lá khi hết giờ"
+                : phase.kind === "defuse"
+                  ? "tự cài bom ngẫu nhiên khi hết giờ"
+                  : "tự rút bài khi hết giờ"}
+            </span>
+          )}
+        </div>
+      )}
       {transfer && transfer.id !== dismissedTransfer && (
         <section
           className="transfer-notice"
@@ -264,18 +315,15 @@ export function GameTable({
           </button>
         </section>
       )}
-      {snapshot.pause && (
-        <section className="pause-banner" aria-label="Ván tạm dừng">
-          <strong>Ván tạm dừng</strong>
+      {phase.kind !== "finished" && offlineMembers.length > 0 && (
+        <section
+          className="connection-notice"
+          aria-label="Người chơi mất kết nối"
+        >
+          <strong>Ván vẫn tiếp tục</strong>
           <p>
-            Chờ{" "}
-            {snapshot.pause.missingIds
-              .map(
-                (id) =>
-                  snapshot.members.find((member) => member.id === id)?.name,
-              )
-              .join(", ")}{" "}
-            kết nối lại.
+            {offlineMembers.map((member) => member.name).join(", ")} đang mất
+            kết nối. Đồng hồ vẫn chạy và lượt sẽ tự xử lý khi hết giờ.
           </p>
         </section>
       )}
@@ -284,7 +332,7 @@ export function GameTable({
           className="bomb-warning"
           data-outcome={bomb.outcome}
           role="alert"
-          aria-label="Trạng thái Mèo Nổ"
+          aria-label={"Trạng thái " + CARD_NAMES.exploding_kitten}
         >
           <svg
             className="bomb-symbol"
@@ -301,7 +349,7 @@ export function GameTable({
           <strong>
             {bombName +
               (bomb.outcome === "defusing"
-                ? " rút trúng Mèo Nổ!"
+                ? " rút trúng " + CARD_NAMES.exploding_kitten + "!"
                 : bomb.outcome === "exploded"
                   ? " đã nổ và bị loại!"
                   : " đã gỡ bom an toàn")}
@@ -352,7 +400,7 @@ export function GameTable({
                 (phase.kind === "defuse" && member.id === phase.playerId
                   ? " is-defusing"
                   : "") +
-                (!member.connected ? " is-offline" : "") +
+                (member.alive && !member.connected ? " is-offline" : "") +
                 (!member.alive ? " is-eliminated" : "")
               }
               style={{
@@ -380,10 +428,10 @@ export function GameTable({
                 </strong>
                 <small>
                   {member.id === snapshot.hostId ? "Chủ phòng · " : ""}
-                  {!member.connected
-                    ? "Mất kết nối"
-                    : !member.alive
-                      ? "Đã nổ · Bị loại"
+                  {!member.alive
+                    ? "Đã nổ · Bị loại"
+                    : !member.connected
+                      ? "Mất kết nối"
                       : member.cardCount + " lá"}
                 </small>
                 {phase.kind === "finished" && member.id === phase.winnerId && (
@@ -481,10 +529,7 @@ export function GameTable({
       {game.reaction && (
         <section className="reaction table-reaction" aria-label="Phản ứng Nope">
           <div>
-            <strong>
-              {snapshot.pause ? "Nope tạm dừng" : "Chờ Nope"} ·{" "}
-              {Math.ceil(reactionMs / 1000)} giây
-            </strong>
+            <strong>Chờ Nope · {Math.ceil(reactionMs / 1000)} giây</strong>
             <p>
               {phase.kind === "reaction" &&
                 (snapshot.members.find(
@@ -559,29 +604,91 @@ export function GameTable({
           </div>
         </section>
       )}
-      {phase.kind === "future" && phase.playerId === me.id && (
-        <section className="private-choice" aria-label="Xem tương lai">
-          <strong>Ba lá trên cùng — chỉ bạn thấy</strong>
-          <ol className="future-cards">
-            {game.futureCards.map((card) => (
-              <li key={card.id} className="table-card" data-type={card.type}>
-                <CardFace type={card.type} />
-              </li>
-            ))}
-          </ol>
-          <button
-            className="secondary"
-            disabled={locked}
-            onClick={() => send({ type: "close_future" })}
+      {(phase.kind === "future" || phase.kind === "alter_future") &&
+        phase.playerId === me.id && (
+          <section
+            className="private-choice"
+            aria-label={
+              phase.kind === "alter_future" ? "Sắp tương lai" : "Xem tương lai"
+            }
           >
-            Đóng tương lai
-          </button>
-        </section>
-      )}
+            <strong>
+              {phase.kind === "alter_future" ? "Sắp lại " : "Xem "}
+              {game.futureCards.length} lá trên cùng — chỉ bạn thấy
+            </strong>
+            {phase.kind === "alter_future" && (
+              <p>
+                Lá số 1 sẽ được rút trước. Dùng nút Trước / Sau, rồi xác nhận.
+              </p>
+            )}
+            <ol className="future-cards">
+              {orderedFuture.map((card, index) => (
+                <li key={card.id}>
+                  <div className="table-card" data-type={card.type}>
+                    <CardFace type={card.type} />
+                  </div>
+                  {phase.kind === "alter_future" && (
+                    <div className="future-controls">
+                      {[-1, 1].map((offset) => (
+                        <button
+                          key={offset}
+                          className="secondary outline-button"
+                          aria-label={
+                            (offset === -1 ? "Đưa " : "Dời ") +
+                            CARD_NAMES[card.type] +
+                            (offset === -1 ? " lên trước" : " ra sau")
+                          }
+                          disabled={
+                            locked ||
+                            index + offset < 0 ||
+                            index + offset >= orderedFuture.length
+                          }
+                          onClick={() => {
+                            const order = orderedFuture.map((item) => item.id);
+                            [order[index], order[index + offset]] = [
+                              order[index + offset],
+                              order[index],
+                            ];
+                            setFutureOrder(order);
+                          }}
+                        >
+                          {offset === -1 ? "Trước" : "Sau"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            <button
+              className="secondary"
+              disabled={locked}
+              onClick={() =>
+                send(
+                  phase.kind === "alter_future"
+                    ? {
+                        type: "reorder_future",
+                        order: orderedFuture.map((card) =>
+                          game.futureCards.findIndex(
+                            (original) => original.id === card.id,
+                          ),
+                        ),
+                      }
+                    : { type: "close_future" },
+                )
+              }
+            >
+              {phase.kind === "alter_future"
+                ? "Xác nhận thứ tự"
+                : "Đóng tương lai"}
+            </button>
+          </section>
+        )}
       {phase.kind === "defuse" && phase.playerId === me.id && (
         <section className="private-choice" aria-label="Cài bom kín">
           <label htmlFor="position">
-            Cài Mèo Nổ (0 = trên cùng, {game.drawCount} = dưới cùng)
+            Cài {CARD_NAMES.exploding_kitten} (0 = trên cùng, {game.drawCount} =
+            dưới cùng)
           </label>
           <div className="bomb-controls">
             <input
@@ -731,7 +838,9 @@ export function GameTable({
         )}
         {myTurn && needsTarget && (
           <div className="target-controls">
-            <label htmlFor="target">Mục tiêu (Xin Bài / combo)</label>
+            <label htmlFor="target">
+              Mục tiêu ({CARD_NAMES.favor} / combo)
+            </label>
             <select
               id="target"
               disabled={locked}

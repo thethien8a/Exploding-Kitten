@@ -3,6 +3,7 @@ import type { Card, CardType, GameCommand, GameState, Phase } from "./engine";
 export const ROOM_ID_PATTERN = /^[a-z0-9-]{1,48}$/;
 export const MAX_MESSAGE_BYTES = 2048;
 export const NOPE_WINDOW_MS = 5000;
+export const TURN_IDLE_MS = 60000;
 export const HEARTBEAT_MS = 10000;
 export const CONNECTION_TIMEOUT_MS = 25000;
 export const ROOM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -66,11 +67,8 @@ export type RoomSnapshot = {
     toId: string;
     cardType: CardType | null;
   };
-  pause: null | {
-    since: number;
-    missingIds: string[];
-    remainingNopeMs: number | null;
-  };
+  // Giữ trường null để client cũ không khóa ván vì mất kết nối.
+  pause: null;
   members: {
     id: string;
     name: string;
@@ -84,6 +82,8 @@ export type RoomSnapshot = {
     futureCards: Card[];
     drawCount: number;
     discardPile: Card[];
+    direction?: 1 | -1;
+    idle?: null | { playerId: string; deadline: number };
     turn: GameState["turn"];
     phase: PublicPhase;
     reaction: null | { deadline: number; passedIds: string[] };
@@ -96,19 +96,22 @@ export type RoomMessage =
   | { type: "replaced"; message: string }
   | { type: "pong" };
 export const CARD_NAMES: Record<CardType, string> = {
-  exploding_kitten: "Mèo Nổ",
-  defuse: "Gỡ Bom",
-  attack: "Tấn Công",
-  skip: "Bỏ Lượt",
-  favor: "Xin Bài",
-  shuffle: "Xáo Bài",
-  see_future: "Xem Tương Lai",
-  nope: "Chặn — Nope",
-  tacocat: "Mèo Taco",
-  cattermelon: "Mèo Dưa Hấu",
-  hairy_potato_cat: "Mèo Khoai Tây",
-  beard_cat: "Mèo Râu",
-  rainbow_ralphing_cat: "Mèo Cầu Vồng",
+  exploding_kitten: "Exploding Kitten",
+  defuse: "Defuse",
+  attack: "Attack",
+  skip: "Skip",
+  favor: "Favor",
+  shuffle: "Shuffle",
+  see_future: "See the Future (3x)",
+  alter_future: "Alter the Future (3x)",
+  reverse: "Reverse",
+  draw_bottom: "Draw from the Bottom",
+  nope: "Nope",
+  tacocat: "Tacocat",
+  cattermelon: "Cattermelon",
+  hairy_potato_cat: "Hairy Potato Cat",
+  beard_cat: "Beard Cat",
+  rainbow_ralphing_cat: "Rainbow-Ralphing Cat",
 };
 const ERRORS: Record<string, string> = {
   ROOM_NOT_FOUND: "Phòng không tồn tại hoặc đã hết hạn.",
@@ -143,12 +146,13 @@ const ERRORS: Record<string, string> = {
   PLAYER_NOT_ALIVE: "Bạn đã bị loại; vẫn có thể xem bàn chơi.",
   RATE_LIMITED: "Thao tác quá nhanh. Hãy chờ một chút.",
   GAME_NOT_STARTED: "Ván chưa bắt đầu.",
-  GAME_PAUSED: "Ván đang tạm dừng để chờ người chơi kết nối lại.",
   ROOM_EXPIRED:
     "Phòng đã hết hạn sau 7 ngày không hoạt động. Hãy tạo phòng mới.",
   SAVE_FAILED:
     "Chưa lưu được thao tác. Không xác nhận thành công; hãy kết nối lại và thử lại.",
   NOT_YOUR_CHOICE: "Lựa chọn này thuộc người chơi khác.",
+  NO_ALTER_FUTURE: "Không có lượt sắp tương lai đang chờ.",
+  INVALID_FUTURE_ORDER: "Cần sắp đủ các lá tương lai, mỗi lá đúng một lần.",
 };
 export function errorMessage(code: string): string {
   return ERRORS[code] ?? "Thao tác không hợp lệ ở trạng thái hiện tại.";
