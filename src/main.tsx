@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  CARD_NAMES,
   ROOM_ID_PATTERN,
   HEARTBEAT_MS,
   CONNECTION_TIMEOUT_MS,
@@ -150,7 +149,7 @@ function App() {
           setLeftGame(true);
           setBusy(false);
           setError(
-            "Bạn đã rời ván. Ghế được giữ, nhưng ván và đồng hồ vẫn chạy. Bấm Quay lại ghế để tiếp tục.",
+            "Đã rời ván, ghế vẫn được giữ. Ván tiếp tục và hết giờ sẽ tự xử lý lượt.",
           );
           return;
         }
@@ -327,7 +326,7 @@ function App() {
           <details className="room-menu">
             <summary aria-label="Tùy chọn phòng">Phòng</summary>
             <div className="room-menu-panel">
-              <label htmlFor="game-link">Link cùng phòng</label>
+              <label htmlFor="game-link">Link phòng</label>
               <input
                 id="game-link"
                 value={location.origin + "/?room=" + room}
@@ -393,7 +392,6 @@ function App() {
     <main className="lab">
       <header className="masthead">
         <Brand />
-        <span className="phase">BÀI THEO SỐ NGƯỜI</span>
       </header>
       {!validRoom && (
         <p className="error" role="alert">
@@ -409,7 +407,6 @@ function App() {
         <>
           <div className="entry-layout">
             <section className="intro">
-              <span className="eyebrow">Một ván bài. Cả hội bạn.</span>
               <h1>
                 {room ? "Hội bạn" : "Lá bài nhỏ."}
                 <br />
@@ -417,19 +414,13 @@ function App() {
               </h1>
               <p>
                 {room
-                  ? "Một lời mời, một chỗ ngồi. Vào bàn cùng những người bạn của mình."
-                  : "Một chút chiến thuật, một chút may mắn. Rủ hội bạn vào bàn và xem ai là chú mèo sống sót cuối cùng."}
+                  ? "Nhập tên để vào chơi cùng bạn bè."
+                  : "Tạo phòng, gửi link và chơi cùng 3–5 người."}
               </p>
-              <div className="hero-meta">
-                <span>3–5 người chơi</span>
-                <span>Mời bạn bằng link</span>
-              </div>
               <div className="hero-art" aria-hidden="true">
                 <div className="art-orbit" />
                 <div className="hero-card hero-card-cat">
-                  <span className="card-kind">Câu lạc bộ</span>
                   <CatMark />
-                  <strong>Hội mèo</strong>
                 </div>
                 <div
                   className="hero-card hero-card-bomb"
@@ -440,19 +431,10 @@ function App() {
                 <div className="hero-card hero-card-defuse" data-type="defuse">
                   <CardFace type="defuse" />
                 </div>
-                <span className="art-sticker">Đừng để nổ!</span>
               </div>
             </section>
             <section className="entry-panel" aria-labelledby="entry-title">
-              <span className="eyebrow">
-                {room ? "Có hẹn với hội mèo" : "Bắt đầu cuộc vui"}
-              </span>
               <h2 id="entry-title">{room ? "Vào phòng" : "Tạo phòng"}</h2>
-              <p className="panel-description">
-                {room
-                  ? "Chọn tên để mọi người nhận ra bạn."
-                  : "Bạn lập bàn. Cả hội nhập cuộc."}
-              </p>
               <form onSubmit={enter}>
                 <label htmlFor="name">Tên của bạn</label>
                 <input
@@ -512,50 +494,19 @@ function App() {
                     ↗
                   </span>
                 </button>
-                {room ? (
+                {room && (
                   <a className="text-button" href="/">
-                    Tạo một phòng mới
+                    Tạo phòng mới
                   </a>
-                ) : (
-                  <p className="form-hint">
-                    Có link mời? Mở link để vào cùng phòng.
-                  </p>
                 )}
               </form>
             </section>
           </div>
-          <ol className="entry-steps" aria-label="Bắt đầu cùng bạn bè">
-            <li>
-              <span>01</span>
-              <div>
-                <strong>Lập một bàn</strong>
-                <small>Chọn tên và số người chơi.</small>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <strong>Rủ hội bạn</strong>
-                <small>Gửi link phòng cho cả nhóm.</small>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <strong>Sẵn sàng, chơi thôi</strong>
-                <small>Đủ người là bắt đầu cuộc vui.</small>
-              </div>
-            </li>
-          </ol>
         </>
       ) : (
         <>
           <section className="lobby-intro">
-            <div>
-              <span className="eyebrow">Hẹn nhau ở đây</span>
-              <h1>Phòng chờ</h1>
-              <p>Rủ đủ hội bạn, sẵn sàng rồi vào bàn.</p>
-            </div>
+            <h1>Phòng chờ</h1>
             <span className="lobby-room-code">
               PHÒNG / {room.slice(0, 8).toUpperCase()}
             </span>
@@ -564,7 +515,6 @@ function App() {
             <section className="counter-panel" aria-label="Phòng chờ">
               <div className="panel-heading">
                 <div>
-                  <span className="eyebrow">Hội mèo hôm nay</span>
                   <h2>
                     {snapshot?.members.length ?? 1} /{" "}
                     {snapshot?.capacity ?? capacity} người
@@ -630,7 +580,7 @@ function App() {
                       <span className="seat" aria-hidden="true">
                         +
                       </span>
-                      <span>Đợi một người bạn</span>
+                      <span>Ghế trống</span>
                     </li>
                   ),
                 )}
@@ -659,13 +609,9 @@ function App() {
               </div>
             </section>
             <aside className="controls">
-              <span className="eyebrow">Cùng bàn, cùng vui</span>
-              <h2>Mời hội bạn</h2>
-              <p className="panel-description">
-                Gửi link này để bạn bè vào đúng bàn của bạn.
-              </p>
+              <h2>Mời bạn</h2>
               <div className="invite">
-                <label htmlFor="room-link">Link cùng phòng</label>
+                <label htmlFor="room-link">Link phòng</label>
                 <input
                   id="room-link"
                   value={location.origin + "/?room=" + room}
@@ -705,14 +651,6 @@ function App() {
                   </select>
                 </div>
               )}
-              <div className="lobby-tip">
-                <CatMark />
-                <span>
-                  Giữ {CARD_NAMES.defuse} bên mình.
-                  <br />
-                  <strong>Giữ bạn bè ở gần hơn.</strong>
-                </span>
-              </div>
               {leftGame ? (
                 <button
                   className="secondary"

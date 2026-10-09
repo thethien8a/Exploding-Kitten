@@ -513,7 +513,7 @@ for (const type of ["reverse", "draw_bottom"] as const) {
       await actor
         .locator('.hand .card[data-card-id="' + card.id + '"]')
         .click();
-      await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
+      await actor.getByRole("button", { name: "Đánh 1 lá" }).click();
       await expect(
         actor.getByRole("region", { name: "Phản ứng Nope" }),
       ).toBeVisible();
@@ -628,9 +628,7 @@ for (const drawsBomb of [false, true]) {
         const cards = actor.locator('.hand .card:not([data-type="defuse"])');
         await cards.nth(0).click();
         await cards.nth(1).click();
-        await actor
-          .getByLabel("Mục tiêu (Favor / combo)")
-          .selectOption(sessions[1].playerId);
+        await actor.getByLabel("Mục tiêu").selectOption(sessions[1].playerId);
         await expect(
           actor.locator('.hand .card[aria-pressed="true"]'),
         ).toHaveCount(2);
@@ -684,9 +682,7 @@ for (const drawsBomb of [false, true]) {
         ).toHaveCount(0);
         await expect(actor.locator(".hand .card.selected")).toHaveCount(0);
         await expect(actor.locator(".card-help")).toHaveCount(0);
-        await expect(actor.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
-          0,
-        );
+        await expect(actor.getByLabel("Mục tiêu")).toHaveCount(0);
         await actor.screenshot({
           path: testInfo.outputPath("draw-selected-after.png"),
           fullPage: true,
@@ -694,7 +690,7 @@ for (const drawsBomb of [false, true]) {
         if (!drawsBomb) {
           await cards.nth(0).click();
           await expect(
-            actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }),
+            actor.getByRole("button", { name: "Đánh 1 lá" }),
           ).toBeEnabled();
           await expect(
             actor.locator('.hand .card[aria-pressed="true"]'),
@@ -752,7 +748,7 @@ for (const finishes of [false, true]) {
           const eliminatedSeat = page.locator(
             '[data-player-id="' + sessions[0].playerId + '"]',
           );
-          await expect(eliminatedSeat).toContainText("Đã nổ · Bị loại");
+          await expect(eliminatedSeat).toContainText("Bị loại");
           await expect(eliminatedSeat).toHaveCSS(
             "background-color",
             "rgb(36, 36, 36)",
@@ -901,7 +897,7 @@ for (const finishes of [false, true]) {
             pages[1].locator(
               '[data-player-id="' + sessions[0].playerId + '"] small',
             ),
-          ).toContainText("Đã nổ · Bị loại");
+          ).toContainText("Bị loại");
           await pages[1].screenshot({
             path: resolve(".amp/in/artifacts/eliminated-offline-320.png"),
             fullPage: true,
@@ -1658,12 +1654,12 @@ for (const count of [2, 3]) {
         for (let index = 0; index < count; index++)
           await cards.nth(index).click();
         await pages[0]
-          .getByLabel("Mục tiêu (Favor / combo)")
+          .getByLabel("Mục tiêu")
           .selectOption(sessions[1].playerId);
         if (count === 3)
           await pages[0].getByLabel("Loại bài gọi tên").selectOption("defuse");
         await pages[0]
-          .getByRole("button", { name: "Đánh " + count + " lá đã chọn" })
+          .getByRole("button", { name: "Đánh " + count + " lá" })
           .click();
         await expect(pages[0].locator(".card-arriving")).toHaveCount(count);
         await expect(pages[0].locator(".card-arriving").first()).toHaveCSS(
@@ -1834,13 +1830,11 @@ for (const reclaimedType of ["defuse", "exploding_kitten"] as const) {
             .locator('.hand .card[data-card-id="' + card.id + '"]')
             .click();
         const play = actor.getByRole("button", {
-          name: "Đánh 5 lá đã chọn",
+          name: "Đánh 5 lá",
           exact: true,
         });
         await expect(play).toBeDisabled();
-        await expect(actor.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
-          0,
-        );
+        await expect(actor.getByLabel("Mục tiêu")).toHaveCount(0);
         const discard = actor.getByLabel("Lá bài bỏ muốn lấy");
         const publicCardId = (await view(actor)).game!.discardPile[1].id;
         await discard.selectOption(publicCardId);
@@ -2040,16 +2034,14 @@ for (const scenario of [
         });
         for (let index = 0; index < scenario.count; index++)
           await cats.nth(index).click();
-        await actor
-          .getByLabel("Mục tiêu (Favor / combo)")
-          .selectOption(sessions[1].playerId);
+        await actor.getByLabel("Mục tiêu").selectOption(sessions[1].playerId);
         if (scenario.count === 3)
           await actor
             .getByLabel("Loại bài gọi tên")
             .selectOption(scenario.succeeds ? "beard_cat" : "attack");
         await actor
           .getByRole("button", {
-            name: "Đánh " + scenario.count + " lá đã chọn",
+            name: "Đánh " + scenario.count + " lá",
           })
           .click();
         await expect
@@ -2236,7 +2228,7 @@ test("Attack qua Worker luôn chuyển 2 lượt, kể cả sau rút một lư�
       await expect(actor.locator(".card-help")).toHaveText(
         "Attack — Kết thúc mọi lượt của bạn, người kế tiếp chơi 2 lượt. Không cộng dồn.",
       );
-      await actor.getByRole("button", { name: "Đánh 1 lá đã chọn" }).click();
+      await actor.getByRole("button", { name: "Đánh 1 lá" }).click();
       await expect
         .poll(async () => (await view(actor)).game!.phase.kind)
         .toBe("reaction");
@@ -2529,7 +2521,7 @@ test("phòng hết hạn xóa cả snapshot/journal, phiên cũ có thông báo 
       page.getByText("Không thể mở phòng từ lời mời này.", { exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: "Tạo một phòng mới", exact: true }),
+      page.getByRole("link", { name: "Tạo phòng mới", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Đang kiểm tra lời mời…", { exact: true }),

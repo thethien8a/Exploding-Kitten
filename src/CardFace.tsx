@@ -22,17 +22,6 @@ export const CARD_PATHS: Partial<Record<CardType, string>> = {
 export function CardFace({ type }: { type: CardType }) {
   return (
     <>
-      <span className="card-kind" aria-hidden="true">
-        {type === "defuse"
-          ? "Bảo vệ"
-          : type === "nope"
-            ? "Phản ứng"
-            : type === "exploding_kitten"
-              ? "Nguy hiểm"
-              : CARD_PATHS[type]
-                ? "Tác dụng"
-                : "Mèo thường"}
-      </span>
       <svg
         className="card-symbol"
         viewBox="0 0 48 48"

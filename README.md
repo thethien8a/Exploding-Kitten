@@ -1,17 +1,30 @@
-# Mèo Nổ — Phase 0–3
+# Mèo Nổ — Exploding Kittens Online
 
-Game web tiếng Việt đang xây theo từng phase, tên lá bài hiển thị bằng tiếng Anh gốc. Engine dựa trên luật Original Edition 2022 đã nối vào Worker và bàn chơi multiplayer: phòng 3/4/5 người, bài kín, thao tác bài, Nope, tiếp tục khi mất kết nối, khôi phục sau restart, hủy và tái đấu. Ván mới dùng **bộ cơ bản pha Alter the Future, Reverse, Draw from the Bottom và thêm 2 Defuse dư**, mỗi người bắt đầu với **5 lá gồm 1 Defuse bảo đảm và 4 lá ngẫu nhiên**; mỗi người trên 3 vẫn thêm một lá mỗi loại thường, kể cả ba loại mới, không tăng Exploding Kitten/Defuse theo ghế. **Phase 2–3 đã nghiệm thu local; đã triển khai bàn oval phương án B theo yêu cầu, nhưng chưa nghiệm thu toàn bộ Phase 4, điện thoại thật hoặc chơi nhóm production.** Chưa deploy live.
+Game Exploding Kittens trên trình duyệt dành cho nhóm **3–5 người**, với giao diện tiếng Việt và tên lá bài tiếng Anh. Tạo phòng, gửi link cho bạn bè và chơi trên máy tính hoặc điện thoại, không cần đăng ký tài khoản.
 
-[Kế hoạch gốc](meo-no-implementation-plan.md) · [Lộ trình](documents/README.md) · [Kết quả thực tế](documents/PROGRESS.md)
+**Chức năng và giao diện đã hoàn thiện, được chủ dự án và nhóm người chơi kiểm thử và nghiệm thu.** Hệ thống hỗ trợ trọn vòng chơi: phòng chờ, bài kín, đánh bài/combo, Nope, xử lý bom, kết nối lại, lưu ván và tái đấu.
+
+[Tài liệu kỹ thuật](documents/README.md) · [Lịch sử phát triển và nghiệm thu](documents/PROGRESS.md) · [Kế hoạch tham chiếu](meo-no-implementation-plan.md)
+
+## Tính năng
+
+- **Chơi thời gian thực:** phòng 3/4/5 người, link mời, sẵn sàng, quyền chủ phòng, hủy ván và tái đấu.
+- **Bàn chơi riêng tư:** chỉ thấy tay bài của mình; thông báo mục tiêu, bom và kết quả combo được gửi đúng người có quyền xem.
+- **Bộ bài tùy chỉnh cho nhóm:** bộ cơ bản pha Alter the Future, Reverse, Draw from the Bottom, thêm 2 Defuse dư; mỗi người bắt đầu với 5 lá.
+- **Giao diện desktop/mobile:** bàn oval, tay bài gom theo loại và cuộn ngang, xác nhận trước khi cho bài hoặc cài bom, đánh dấu người bị loại và người thắng.
+- **Không kẹt phòng vì người vắng mặt:** Nope 5 giây, tự xử lý lượt/lựa chọn sau 60 giây không hoạt động, kể cả khi người chơi mất mạng hoặc rời ván.
+- **Lưu và khôi phục:** giữ bài/lượt qua restart, kết nối lại không chia lại bài; gửi lại lệnh đã xác nhận không thực hiện thao tác lần hai.
 
 ## Luật nhóm hiện tại
+
+Luật dựa trên Original Edition 2022 với các điều chỉnh dành cho nhóm, không phải bộ Original nguyên bản. Mỗi ghế trên 3 thêm một lá mỗi loại thường, kể cả ba loại mở rộng; không tăng Exploding Kitten/Defuse theo ghế.
 
 - **Alter the Future (3x):** xem kín tối đa 3 lá đầu, dùng **Trước / Sau** rồi **Xác nhận thứ tự**. Lá số 1 được rút trước; không kết thúc lượt. Chỉ người đánh được xem và xác nhận, thứ tự chưa xác nhận chỉ nằm trên màn hình của họ.
 - **Reverse:** đảo thứ tự người chơi, kết thúc một lượt không rút. Khi còn lượt Attack, chỉ trả một lượt; còn 2 người thì tác dụng như Skip. Bàn hiển thị chiều và người tiếp theo.
 - **Draw from the Bottom:** rút đúng lá cuối và trả một lượt. Gặp bom vẫn phải Defuse hoặc bị loại như rút đầu. Cả ba lá mới đều có thể bị Nope. Tác dụng theo [luật Imploding Kittens chính thức](https://cdn.shopify.com/s/files/1/0345/9180/1483/files/imploding-english.pdf?v=1734625756); Attack giữ luật nhóm không cộng dồn.
 - **Tay khởi đầu 5 lá:** 1 Defuse bảo đảm, rồi chia thêm 4 lá từ bộ không có bom. Defuse dư vẫn trộn trước khi chia nên có thể nhận thêm. Chỉ áp dụng khi bắt đầu ván mới; không thu bớt bài của ván đang chơi/đã lưu.
 - **60 giây không hoạt động:** server tự rút đầu khi người tới lượt không thực hiện thao tác chơi hợp lệ. Đánh bài/lựa chọn được chấp nhận cho 60 giây mới; chọn lá, mở menu, heartbeat, lệnh lỗi, replay ACK và đổi tab không gia hạn. Trong reaction dùng đồng hồ Nope riêng; sau khi chốt bắt đầu 60 giây cho lượt/lựa chọn tiếp theo. Hết giờ xem/sắp tương lai thì đóng/giữ thứ tự server hiện tại rồi rút; người đang phải cho bài tự cho một lá ngẫu nhiên; người gỡ bom tự cài ngẫu nhiên để kết thúc lượt. Không rút bù nhiều lượt nếu alarm chạy muộn.
-- **Nope 5 giây:** mỗi Nope hợp lệ mở lại 5 giây và xóa các lượt Bỏ qua; cả nhóm Bỏ qua vẫn chốt sớm được. Đây cũng là giá trị đã có trước thay đổi này.
+- **Nope 5 giây:** mỗi Nope hợp lệ mở lại 5 giây và xóa các lượt Bỏ qua; cả nhóm Bỏ qua vẫn chốt sớm được.
 - **Không đóng băng khi offline:** mất mạng, đóng tab hoặc **Rời ván (giữ ghế)** không dừng ván hay gia hạn đồng hồ. Người vắng mặt vẫn có lượt và tự rút khi hết 60 giây; Nope và các lựa chọn đang chờ vẫn chốt theo hạn riêng. Người đã bị loại thoát không đổi lượt, bài hay thời gian; khi quay lại chỉ xem bàn. Người còn sống quay lại nhận bài/lượt hiện tại, kể cả những lá đã tự rút.
 - Cả đồng hồ 60 giây và Nope được lưu cùng snapshot/alarm SQLite, tiếp tục kể cả khi tất cả offline. Hủy/kết thúc xóa đồng hồ. Ván cũ đang pause được chuyển sang đồng hồ chạy từ thời gian còn lại một lần khi nạp bằng bản mới. Bộ bài mới chỉ áp dụng khi bắt đầu **ván mới**, không thêm lá hoặc xáo lại ván đã lưu.
 
@@ -23,9 +36,9 @@ Game web tiếng Việt đang xây theo từng phase, tên lá bài hiển thị
 
 ## Giao diện
 
-UI theo hướng **Playful paper**: nền kem, xanh rừng–cam, logo mèo và typography bo tròn. Trang tạo/vào phòng có form rõ ràng và hướng dẫn mời bằng link; phòng chờ tách danh sách người chơi, ghế trống và khu vực mời bạn. Bàn oval giữ bố trí cũ, làm mới mặt bàn, tay bài, trạng thái chọn và các panel riêng; khi người còn sống offline, hiện **Ván vẫn tiếp tục** và đồng hồ vẫn chạy, không khóa người đang online. Ghế bị loại luôn hiện **Đã nổ · Bị loại**, kể cả khi offline. Payload bài kín và cơ chế reconnect được bảo toàn.
+UI theo hướng **Playful paper**: nền kem, xanh rừng–cam, logo mèo và typography bo tròn. Trang tạo/vào phòng và phòng chờ ưu tiên thao tác chính, không lặp khẩu hiệu hoặc hướng dẫn dài. Mặt bài chỉ có biểu tượng và tên tiếng Anh; mô tả tác dụng hiện khi chọn lá. Bàn oval đặt chồng bài ở giữa, ghế quanh bàn và tay bài riêng phía dưới; đồng hồ ghi thời gian còn lại và thao tác tự động khi hết giờ. Người còn sống offline được báo **Ván vẫn tiếp tục**, không khóa người online; ghế bị loại luôn hiện **Bị loại**, kể cả khi offline. Lỗi, mục tiêu và xác nhận trao bài/cài bom vẫn hiển thị rõ ràng.
 
-Hướng thiết kế tham khảo [Envato: UX/UI trends 2026](https://elements.envato.com/learn/ux-ui-design-trends) và [WANDR: Game UI trends 2026](https://www.wandr.studio/blog/game-ui-design-trends-2026): phân cấp rõ, giảm nhiễu, chuyển động phản hồi có mục đích và bố cục riêng cho mobile. Font **Baloo 2** và **Be Vietnam Pro** được đóng gói local trong `src/assets/fonts/`, kèm giấy phép SIL OFL; không phụ thuộc request Google Fonts khi chơi. Logo và mặt bài dùng chung ở `src/Brand.tsx` và `src/CardFace.tsx`; màu và typography tập trung trong CSS variables.
+Font **Baloo 2** và **Be Vietnam Pro** được đóng gói local trong `src/assets/fonts/`, kèm giấy phép SIL OFL; không phụ thuộc request Google Fonts khi chơi. Logo và mặt bài dùng chung ở `src/Brand.tsx` và `src/CardFace.tsx`; màu và typography tập trung trong CSS variables. Hiệu ứng chơi bài hỗ trợ chế độ giảm chuyển động.
 
 ## Chạy local
 
@@ -36,13 +49,13 @@ npm ci
 npm run dev
 ```
 
-Mở <http://127.0.0.1:5173/>. Nhập tên, chọn **3/4/5 người**, bấm **Tạo phòng**, rồi gửi **Link cùng phòng** cho nhóm. Khi đủ người, tất cả bấm **Sẵn sàng**, chủ phòng bấm **Bắt đầu ván**.
+Mở <http://127.0.0.1:5173/>. Nhập tên, chọn **3/4/5 người**, bấm **Tạo phòng**, rồi gửi **Link phòng** cho nhóm. Khi đủ người, tất cả bấm **Sẵn sàng**, chủ phòng bấm **Bắt đầu ván**.
 
 Khi bắt đầu, mọi người tự chuyển từ phòng chờ sang **bàn oval riêng**: chồng rút/bài bỏ ở giữa, các ghế xung quanh, ghế của bạn ở dưới và tay bài riêng bên dưới bàn. Lá vừa đánh, cả combo 2/3 lá và Nope, hiện công khai kèm tên người đánh; Favor và combo ghi rõ “nhắm vào” tên người được chọn. Có hiệu ứng đưa bài ra giữa bàn và hỗ trợ giảm chuyển động. URL phòng và kết nối giữ nguyên, không reload hoặc tạo phòng mới. Tay bài tự gom các lá cùng loại cạnh nhau, kể cả sau khi rút/lấy bài; lựa chọn vẫn theo ID lá. Trên điện thoại, tay bài cuộn ngang để xem đủ các lá.
 
 Sau khi combo 2/3 lá được chốt, **chỉ người lấy và người bị lấy** nhận thông báo tên lá đã chuyển, hoặc kết quả không lấy được bài. Thông báo có nút đóng, giữ qua reconnect/restart và không mở lại khi nhận cùng ID trong phiên đang mở. Người thứ ba và API công khai không nhận thông tin này; combo bị Nope chặn không báo đã lấy bài.
 
-**Combo 5 lá khác loại:** chọn 5 lá có tên khác nhau trên tay, chọn **Lá bài bỏ muốn lấy** từ chồng bài bỏ chung rồi bấm **Đánh 5 lá đã chọn**. Bạn lấy đúng 1 lá đã có trong bài bỏ trước khi đổi, không lấy lại một trong 5 lá vừa trả. Combo này xử lý ngay, **không thể Nope** và **không kết thúc lượt**. Defuse/Nope có thể là một trong 5 loại và không kích hoạt tác dụng riêng khi dùng trong combo.
+**Combo 5 lá khác loại:** chọn 5 lá có tên khác nhau trên tay, chọn **Lá bài bỏ muốn lấy** từ chồng bài bỏ chung rồi bấm **Đánh 5 lá**. Bạn lấy đúng 1 lá đã có trong bài bỏ trước khi đổi, không lấy lại một trong 5 lá vừa trả. Combo này xử lý ngay, **không thể Nope** và **không kết thúc lượt**. Defuse/Nope có thể là một trong 5 loại và không kích hoạt tác dụng riêng khi dùng trong combo.
 
 Khi ai rút trúng Exploding Kitten, cả bàn thấy tên người đó và trạng thái **đang gỡ bom**, **đã gỡ bom an toàn** hoặc **đã nổ và bị loại**. Ghế đang gỡ được đánh dấu; ghế bị loại chuyển sang tông đen/xám, giữ tên và trạng thái đã nổ dễ đọc. Khi ván kết thúc, người thắng có vương miện, viền vàng và nhãn **Người thắng**; dấu hiệu bị loại/thắng không giữ sang ván mới. Thông báo không lộ vị trí cài lại hoặc tay bài.
 
@@ -57,7 +70,7 @@ npm run preview
 
 Mở <http://127.0.0.1:4173/>. Nếu đã có preview bản cũ chạy ở cổng này, cần dừng và chạy lại trước khi thử build mới; không dùng frontend mới với Worker cũ.
 
-Trong lượt, chọn 1 lá tác dụng hoặc 2/3 lá cùng tên, chọn mục tiêu khi cần, rồi xác nhận đánh; rút bài để kết thúc lượt. Người cho tự chọn bài, người xem tương lai có nút đóng, người gỡ bom nhập kín vị trí 0..N hoặc chọn **Ngẫu nhiên**, rồi xác nhận cài bom. Nhập 0/N để chọn đầu/cuối; nhập số sẽ bỏ chọn Ngẫu nhiên. Chọn Ngẫu nhiên chưa gửi lệnh; khi xác nhận, server chọn một trong N+1 vị trí, không trả vị trí đã chọn xuống client. Nope/Bỏ qua chỉ dùng trong cửa sổ 5 giây. Bàn oval B là phần UX đã chọn, chưa phải nghiệm thu đầy đủ Phase 4.
+Trong lượt, chọn 1 lá tác dụng hoặc 2/3 lá cùng tên, chọn mục tiêu khi cần, rồi xác nhận đánh; rút bài để kết thúc lượt. Người cho tự chọn bài, người xem tương lai có nút đóng, người gỡ bom nhập kín vị trí 0..N hoặc chọn **Ngẫu nhiên**, rồi xác nhận cài bom. Nhập 0/N để chọn đầu/cuối; nhập số sẽ bỏ chọn Ngẫu nhiên. Chọn Ngẫu nhiên chưa gửi lệnh; khi xác nhận, server chọn một trong N+1 vị trí, không trả vị trí đã chọn xuống client. Nope/Bỏ qua chỉ dùng trong cửa sổ 5 giây.
 
 Khi người còn sống mất kết nối, ván và đồng hồ vẫn tiếp tục; hết giờ họ tự rút, cho bài hoặc cài bom theo giai đoạn hiện tại. Không loại họ chỉ vì offline và không cần chờ đủ nhóm quay lại. Menu **Phòng** chứa link mời và **Rời ván (giữ ghế)** để ngừng tự reconnect; bấm **Quay lại ghế** để nhận trạng thái mới. Chủ rời chủ động chuyển quyền cho người online; mất mạng thụ động không đổi chủ. Trong menu này, chủ phòng có thể **Hủy ván về phòng chờ**, hoặc **Về phòng chờ** sau kết thúc để đổi số người và tổ chức ván mới.
 
@@ -65,7 +78,7 @@ Khi người còn sống mất kết nối, ván và đồng hồ vẫn tiếp t
 
 Dữ liệu local mặc định nằm trong `.wrangler/state/v3/`, không nằm trong RAM của React hay một biến bộ đếm trên server. Giữ thư mục này khi thử restart; xóa nó sẽ xóa dữ liệu thử local. Test tự động dùng thư mục riêng, không xóa dữ liệu chạy thủ công. `MEONO_STATE_PATH` trong Vite config chỉ để chọn thư mục lưu local khi kiểm thử.
 
-## Engine Phase 1
+## Engine và luật chơi
 
 `shared/engine.ts` không import React, Cloudflare, WebSocket hoặc storage. Trạng thái chỉ gồm object/array/giá trị JSON; mỗi chuyển trạng thái trả bản mới, không sửa đầu vào. Thứ tự `drawPile[0]` là lá trên cùng; `removedCards` giữ các lá bị loại lúc thiết lập. Tổng inventory ván mới cho 3/4/5 người, kể cả bài bị loại, là 67/81/95 ID duy nhất; bộ nền pha mở rộng có 67 lá.
 
@@ -77,7 +90,7 @@ Dữ liệu local mặc định nằm trong `.wrangler/state/v3/`, không nằm 
 | `resolveReaction(game, random)` | API **server-only** chốt tác dụng theo parity Nope; không phải lệnh client |
 | `getFutureCards(game, playerId)` | Tối đa 3 lá theo thứ tự, chỉ trả khi đúng người đang xem/sắp; người khác nhận `[]` |
 
-Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong khoảng từ 0 (bao gồm) đến 1 (không bao gồm). Không cho client truyền seed/kết quả random. Các lỗi luật là `Error` có thông điệp mã như `NOT_YOUR_TURN`, `ACTION_PENDING`, `INVALID_BOMB_POSITION`; adapter sau này dịch thành thông báo tiếng Việt.
+Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong khoảng từ 0 (bao gồm) đến 1 (không bao gồm). Không cho client truyền seed/kết quả random. Các lỗi luật là `Error` có thông điệp mã như `NOT_YOUR_TURN`, `ACTION_PENDING`, `INVALID_BOMB_POSITION`; lớp phòng dịch thành thông báo tiếng Việt.
 
 - Bài tác dụng và combo 2/3 lá đánh vào discard ngay; tác dụng chỉ bắt đầu sau `resolveReaction`. Nope chỉ được dùng trong `reaction`, có thể chặn Nope hoặc combo 2/3, không chặn rút bom/Defuse hay combo 5 lá.
 - Combo 5 lá yêu cầu 5 ID trên tay thuộc 5 loại khác nhau và `discardIndex` trỏ tới một lá đã có trong bài bỏ. Server lấy lá đó rồi bỏ 5 lá trả cùng một thao tác, giữ nguyên lượt/chồng rút và không tạo reaction. Index được kiểm tra cùng phiên bản bàn để không lấy nhầm sau thay đổi; gửi lại cùng ID lệnh không đổi bài lần nữa.
@@ -90,7 +103,7 @@ Nguồn `random` được truyền vào từ server, mỗi mẫu là số trong 
 
 **Không gửi `GameState` đầy đủ xuống trình duyệt** vì chứa toàn bộ tay bài/chồng rút. `worker/room.ts` tạo payload whitelist riêng; Worker xác thực ghế từ token, không nhận `playerId` của client. JSON round-trip trong test engine không thay thế test restart storage thực tế.
 
-## Multiplayer Phase 2
+## Multiplayer và API
 
 | Đường dẫn / thông điệp | Hợp đồng |
 | --- | --- |
@@ -115,17 +128,17 @@ Token 256 bit do server phát hành, chỉ hash SHA-256 được lưu trên serv
 
 Giới hạn hiện tại: JSON/frame 2.048 byte; 40 frame/10 giây/ghế; 20 yêu cầu tạo/join và 60 kết nối/phút/phòng; tạo tối đa 6 phòng/phút/IP và 60/phút toàn ứng dụng. Bộ giới hạn tạo dùng Durable Object chung, không chỉ biến RAM trong Worker. Đây là giới hạn vận hành ban đầu, không phải số đo quota/CPU production.
 
-## Khôi phục và vòng đời Phase 3
+## Khôi phục và vòng đời phòng
 
 - Snapshot schema **1**, luật **original-2022-mixed** (ván mới pha mở rộng); vẫn đọc **original-2022**, **original-2022-scaled** và **original-2022-long** của các ván cũ. ID ván được lưu cùng bài, chiều chơi, lượt, reaction/pass, deadline không hoạt động và phiên. Snapshot cũ thiếu timer có 60 giây mới, thiếu chiều mặc định theo thứ tự ghế, không chia lại. Pause cũ được xóa và thời gian còn lại chuyển thành deadline mới; snapshot gửi client vẫn giữ `pause: null` để tương thích. Schema/luật không hỗ trợ bị từ chối, không ghi đè ván.
 - Một hàng đợi tuần tự hóa mutation/command/alarm. Transaction lưu snapshot, ACK và lịch alarm; lỗi ghi rollback cả dữ liệu và state trong RAM, không gửi ACK thành công. Resend sau mất ACK giữ kết quả rút hoặc xáo đã lưu.
-- Heartbeat `{"type":"ping"}` mỗi **10 giây**, auto-response `{"type":"pong"}` bằng Hibernation API. Alarm dùng timestamp thật của socket, phát hiện im lặng tại **25 giây**. Đây không phải giới hạn suy nghĩ hay thời gian được phép quay lại; cần hiệu chỉnh sau kiểm thử điện thoại thật.
+- Heartbeat `{"type":"ping"}` mỗi **10 giây**, auto-response `{"type":"pong"}` bằng Hibernation API. Alarm dùng timestamp thật của socket, phát hiện im lặng tại **25 giây**. Mốc này chỉ xác định trạng thái kết nối, độc lập với đồng hồ không hoạt động 60 giây và không giới hạn thời gian quay lại ghế.
 - Một alarm bền vững chọn hạn gần nhất giữa Nope, 60 giây không hoạt động, heartbeat và TTL; không có timer RAM server làm nguồn thời hạn. Mất socket thật hoặc restart không đóng băng/gia hạn deadline. Hạn đã qua được xử lý khi alarm chạy, không rút bù nhiều lượt; lượt/lựa chọn mới có thời gian mới.
 - Client lấy snapshot riêng mới, giữ nguyên lệnh chưa ACK, reconnect có backoff. Khi tab trở lại hoặc quá hạn pong, bỏ kết nối cũ và nối mới mà không chờ frame đóng; sự kiện muộn từ socket cũ không sửa trạng thái kết nối mới.
 - Chủ rời giữa ván chuyển quyền cho ghế online đầu tiên. Nếu tất cả offline, lưu quyền dự phòng và chuyển cho thành viên hợp lệ quay lại đầu tiên. Cả nhóm rớt mạng thụ động thì vẫn giữ chủ cũ. Sau kết thúc giữ nhóm, xóa ready; ván sau có ID mới.
 - Phòng hết hạn sau **7 ngày** từ create/join/reconnect hợp lệ hoặc lệnh mới thành công cuối. GET, heartbeat, alarm và replay ACK không gia hạn. Xóa cả snapshot, journal, rate limit và alarm, tắt auto-response; client báo hết hạn và xóa phiên local của phòng, không reconnect vô hạn.
 
-Chi tiết nghiệm thu và giới hạn trong [Phase 3](documents/phase-3-recovery.md) và [PROGRESS](documents/PROGRESS.md). Runtime local không chứng minh hibernation/eviction hay khôi phục sau deploy production.
+Chi tiết kỹ thuật và lịch sử kiểm chứng trong [tài liệu khôi phục](documents/phase-3-recovery.md) và [PROGRESS](documents/PROGRESS.md).
 
 ## Kiểm tra
 
@@ -147,7 +160,7 @@ npm test
 - Origin/token/method sai, JSON/binary/quá dài/giả `playerId` và rate limit không làm đổi ván.
 - Alarm runtime 5 giây chốt action; rút/Defuse tới loại một người, kiểm tra payload spectator.
 - Ba lá mở rộng qua UI/Worker thật; sắp kín bằng Trước/Sau, replay và restart SQLite không sắp lần hai; người khác offline không khóa lựa chọn hay gia hạn đồng hồ. Kiểm tra render 1280/390/320px. Alarm chạy đủ 60 giây thật vẫn tự rút dù heartbeat đều, chỉ rút một lần và không lộ lá cho người khác.
-- UI mobile Nope/future/favor/defuse/combo bằng fixture snapshot **chỉ để kiểm tra render và lệnh UI**; kiểm tra tên bài dài nằm trong thẻ và cuộn được đến lá cuối; nút Rút bài bên trái, Đánh lá đã chọn bên phải ở 1280/390/320px. Không coi fixture là bằng chứng server xử lý luật. Luật mạng được kiểm tra bằng runtime thật và Vitest riêng.
+- UI mobile Nope/future/favor/defuse/combo bằng fixture snapshot **chỉ để kiểm tra render và lệnh UI**; kiểm tra tên bài dài nằm trong thẻ và cuộn được đến lá cuối; nút Rút bài bên trái, Đánh bài bên phải ở 1280/390/320px. Không coi fixture là bằng chứng server xử lý luật. Luật mạng được kiểm tra bằng runtime thật và Vitest riêng.
 - Mọi ghế thấy người dính bom, gỡ thành công hoặc nổ/bị loại, cả khi đó là lần nổ kết thúc ván; người bị loại chỉ xem công khai. Cài ngẫu nhiên không gửi trước xác nhận, không lộ vị trí và không cài lần nữa khi replay sau restart SQLite.
 - UI đánh combo 2/3 lá rồi Nope qua Worker thật: mọi ghế nhận đúng bài/người đánh/mục tiêu, hiệu ứng có giảm chuyển động và không phát lại khi reconnect. Favor giữ thông báo mục tiêu sau restart; không lộ lá được trao và không gắn mục tiêu cũ vào Nope.
 - Tay bài cùng loại nằm cạnh nhau; chọn theo ID vẫn đánh/cho đúng lá. Combo 2/3 thành công hoặc không có lá gọi tên báo đúng kết quả cho hai bên, không lộ cho người thứ ba/API công khai; đóng thông báo rồi replay/reconnect không mở lại, restart giữ kết quả.
@@ -177,7 +190,7 @@ Git Bash:
 PLAYWRIGHT_CHANNEL=chrome npm test
 ```
 
-Kết quả JSON, log và ảnh nằm trong `.amp/in/artifacts/`; dữ liệu SQLite tạm của mỗi test được dọn sau test. Cổng 8788 phải trống. Test bộ đếm Phase 0 đã được thay bằng multiplayer/recovery; bằng chứng lịch sử vẫn ghi trong PROGRESS. Viewport mobile là mô phỏng Chrome, không phải Android/iPhone thật.
+Kết quả JSON, log và ảnh nằm trong `.amp/in/artifacts/`; dữ liệu SQLite tạm của mỗi test được dọn sau test. Cổng 8788 phải trống. Kiểm thử trình duyệt tự động dùng Chrome và viewport mobile mô phỏng. Chủ dự án và nhóm người chơi đã kiểm thử hệ thống và nghiệm thu giao diện; mốc nghiệm thu được ghi trong [PROGRESS](documents/PROGRESS.md).
 
 ## Stack và cấu trúc
 
@@ -195,13 +208,13 @@ Dependency trực tiếp được pin trong `package.json`, dependency bắc c�
 | `tests/room.test.ts` | Test lobby, lệnh/version, reaction/deadline, offline/recovery và whitelist dữ liệu |
 | `tests/foundation.spec.ts` | Browser multiplayer/runtime thật, transport và render desktop/mobile |
 | `tests/recovery.spec.ts` | Restart SQLite, mất ACK/rollback, heartbeat, vòng đời, migration và expiry qua runtime thật |
-| `references/original-edition-2022.pdf` | Luật Original Edition 2022 làm chuẩn cho phase sau |
+| `references/original-edition-2022.pdf` | Luật Original Edition 2022 làm nền cho luật nhóm |
 
-Kết nối dùng `ctx.acceptWebSocket()` / `ctx.getWebSockets()` / `webSocketMessage()` và attachment chỉ chứa ID ghế/kết nối. Snapshot và phiên nằm ở SQLite; alarm bền vững và timestamp auto-response điều phối Nope/không hoạt động/heartbeat/expiry. Dùng API hibernation **không chứng minh** đã đo eviction hoặc billing production.
+Kết nối dùng `ctx.acceptWebSocket()` / `ctx.getWebSockets()` / `webSocketMessage()` và attachment chỉ chứa ID ghế/kết nối. Snapshot và phiên nằm ở SQLite; alarm bền vững và timestamp auto-response điều phối Nope/không hoạt động/heartbeat/expiry.
 
-## Cloudflare Free và giới hạn nghiệm thu
+## Cloudflare và vận hành
 
-Cấu hình hiện tại dùng SQLite Durable Objects và Workers Static Assets, không có dịch vụ yêu cầu Paid. Tài liệu chính thức xác nhận [SQLite Durable Objects có trên Workers Free](https://developers.cloudflare.com/durable-objects/platform/pricing/) và [request static assets miễn phí](https://developers.cloudflare.com/workers/platform/pricing/). API đã đối chiếu với [WebSocket Hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/), [SQLite storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/) và [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/tutorial/).
+Ứng dụng dùng Cloudflare Workers, **SQLite Durable Objects** cho từng phòng và **Workers Static Assets** cho giao diện. `wrangler.jsonc` cấu hình binding `GAME_ROOMS`/`ASSETS`, migration SQLite và routing SPA/API. Tham khảo [WebSocket Hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/), [SQLite storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/) và [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/tutorial/).
 
 Kiểm tra đóng gói mà **không deploy**:
 
@@ -210,6 +223,6 @@ npm run build
 npx wrangler deploy --dry-run
 ```
 
-Chưa đăng nhập/xác minh tài khoản Cloudflare, điều kiện thẻ, quota/CPU/độ trễ thực tế, hibernation sau eviction hoặc khôi phục sau deploy. Dry-run chỉ kiểm tra bundle/config, không chứng minh quyền deploy hoặc hạn mức tài khoản. Quota và Free trên môi trường thật còn phải kiểm tra ở phase 5–6.
+Hướng dẫn triển khai nằm trong [tài liệu deploy](documents/phase-6-deployment.md). Khi cập nhật bản chạy, dùng frontend và Worker cùng phiên bản, giữ dữ liệu phòng và kiểm tra tạo/join, reconnect, chơi hết ván và tái đấu. Chi phí và quota phụ thuộc tài khoản/mức sử dụng; đối chiếu [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) và [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) cho môi trường vận hành.
 
-Đã có xác thực, góc nhìn riêng, chống trùng, giới hạn vận hành và nghiệm thu recovery local, nhưng **không dùng như bản game công khai** trước kiểm thử thiết bị/nhóm và hạ tầng thật ở Phase 4–6. Không commit `.env`, `.dev.vars` hoặc token; không tự push, deploy hoặc bật Paid.
+Nghiệm thu chức năng/giao diện và kiểm thử tự động không thay thế số đo quota, CPU, độ trễ hoặc kiểm chứng khôi phục sau deploy trên hạ tầng thực tế. `--dry-run` chỉ kiểm tra bundle/config, không upload hay triển khai. Không commit `.env`, `.dev.vars`, token hoặc dữ liệu phiên vào Git.

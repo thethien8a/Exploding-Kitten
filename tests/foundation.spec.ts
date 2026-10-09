@@ -173,9 +173,6 @@ for (const capacity of [3, 4, 5]) {
         await expect(
           host.getByRole("heading", { name: /Lá bài nhỏ.*Cú nổ lớn/ }),
         ).toBeVisible();
-        await expect(
-          host.getByLabel("Bắt đầu cùng bạn bè").getByRole("listitem"),
-        ).toHaveCount(3);
         if (capacity === 3) {
           for (const width of [1280, 900, 390, 320]) {
             await host.setViewportSize({ width, height: 844 });
@@ -221,6 +218,30 @@ for (const capacity of [3, 4, 5]) {
         await expect(host.locator(".empty-seat")).toHaveCount(capacity - 1);
         for (let index = 1; index < capacity; index++) {
           await pages[index].goto(link);
+          if (capacity === 3 && index === 1) {
+            await expect(pages[index].locator(".invitation-state")).toHaveText(
+              "1/3 người trong phòng",
+            );
+            for (const width of [1280, 390, 320]) {
+              await pages[index].setViewportSize({ width, height: 844 });
+              expect(
+                await pages[index].evaluate(
+                  () => document.documentElement.scrollWidth <= innerWidth,
+                ),
+              ).toBe(true);
+              await expect(
+                pages[index].getByRole("button", {
+                  name: "Vào phòng",
+                  exact: true,
+                }),
+              ).toBeInViewport();
+              await pages[index].screenshot({
+                path: testInfo.outputPath("invite-" + width + ".png"),
+                fullPage: true,
+              });
+            }
+            await pages[index].setViewportSize({ width: 390, height: 844 });
+          }
           await pages[index]
             .getByLabel("Tên của bạn")
             .fill(
@@ -985,6 +1006,10 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
                 ? { kind: "favor", playerId: "b", targetId: "a" }
                 : { kind: defusing ? "defuse" : "future", playerId: "a" },
         reaction: state === "reaction" ? { deadline: 0, passedIds: [] } : null,
+        idle:
+          state === "reaction"
+            ? null
+            : { playerId: "a", deadline: Date.now() + 60000 },
       },
     };
     const context = await browser.newContext({
@@ -1139,9 +1164,12 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       }
       if (state === "future")
         await expect(
-          page.getByText("Xem 3 lá trên cùng — chỉ bạn thấy"),
+          page.getByText("Xem 3 lá đầu · Chỉ bạn thấy"),
         ).toBeVisible();
       if (state === "favor") {
+        await expect(
+          page.getByRole("timer", { name: "Thời gian không hoạt động" }),
+        ).toHaveText(/^Thảo · \d+s · Tự cho 1 lá$/);
         await expect(
           page.getByRole("region", { name: "Xác nhận cho bài" }),
         ).toContainText("Chọn một lá để đưa cho Minh.");
@@ -1239,6 +1267,9 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       }
       if (defusing) {
         await expect(
+          page.getByRole("timer", { name: "Thời gian không hoạt động" }),
+        ).toHaveText(/^\d+s · Tự cài bom ngẫu nhiên$/);
+        await expect(
           page.getByRole("alert", { name: "Trạng thái Exploding Kitten" }),
         ).toHaveText("Thảo rút trúng Exploding Kitten!");
         const placement = page.getByRole("region", { name: "Cài bom kín" });
@@ -1315,12 +1346,12 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         );
         await expect(page.locator(".card-help")).toHaveCount(0);
         const play = page.getByRole("button", {
-          name: /^Đánh \d+ lá đã chọn$/,
+          name: /^Đánh (bài|\d+ lá)$/,
         });
         const draw = page.getByRole("button", { name: "Rút bài", exact: true });
         await expect(
           page.locator(".hand-actions .actions > button"),
-        ).toHaveText(["Rút bài", "Đánh 0 lá đã chọn"]);
+        ).toHaveText(["Rút bài", "Đánh bài"]);
         await expect(play).toBeDisabled();
         await expect(play).toHaveCSS("opacity", "0.5");
         await expect(draw).toBeEnabled();
@@ -1328,7 +1359,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         const cards = page.getByRole("button", { name: /Tacocat/ });
         for (let index = 0; index < 3; index++) await cards.nth(index).click();
         await expect(play).toBeDisabled();
-        await page.getByLabel("Mục tiêu (Favor / combo)").selectOption("b");
+        await page.getByLabel("Mục tiêu").selectOption("b");
         await page.getByLabel("Loại bài gọi tên").selectOption("attack");
         await expect(page.locator(".card-help")).toHaveText(
           "Tacocat — Ghép 2 hoặc 3 lá cùng tên để lấy bài.",
@@ -1354,6 +1385,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         const timer = page.getByRole("timer", {
           name: "Thời gian không hoạt động",
         });
+        await expect(timer).toHaveText(/^\d+s · Tự rút bài$/);
         const ticking = await timer.textContent();
         await expect(timer).not.toHaveText(ticking!);
         for (const width of [1280, 390, 320]) {
@@ -1413,12 +1445,12 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       }
       if (state === "reclaim") {
         const play = page.getByRole("button", {
-          name: /^Đánh \d+ lá đã chọn$/,
+          name: /^Đánh (bài|\d+ lá)$/,
         });
         const costs = ["defuse-a", "nope-a", "attack-a", "skip-a"];
         for (const id of costs)
           await page.locator('.hand .card[data-card-id="' + id + '"]').click();
-        await expect(play).toHaveText("Đánh 4 lá đã chọn");
+        await expect(play).toHaveText("Đánh 4 lá");
         await expect(play).toBeDisabled();
         await page.locator('.hand .card[data-card-id="skip-b"]').click();
         await expect(page.locator(".card-help")).toHaveText(
@@ -1431,9 +1463,7 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         const discard = page.getByLabel("Lá bài bỏ muốn lấy");
         await expect(discard).toBeEnabled();
         await expect(play).toBeDisabled();
-        await expect(page.getByLabel("Mục tiêu (Favor / combo)")).toHaveCount(
-          0,
-        );
+        await expect(page.getByLabel("Mục tiêu")).toHaveCount(0);
         await expect(
           page.getByRole("region", { name: "Phản ứng Nope" }),
         ).toHaveCount(0);
@@ -1534,9 +1564,11 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
         }
         await page.setViewportSize({ width: 390, height: 844 });
       }
+      await page.locator(".game-header").scrollIntoViewIfNeeded();
       await page.screenshot({
         path: testInfo.outputPath("phase-2-ui-" + state + ".png"),
         fullPage: true,
+        animations: "disabled",
       });
       expect(
         await page.evaluate(
@@ -1603,12 +1635,12 @@ test("giao diện mobile: Nope, tương lai, cho bài, cài bom và combo", asyn
       };
       const labels = {
         reaction: "Nope",
-        future: "Đóng tương lai",
+        future: "Đóng",
         favor: "Xác nhận đưa Nope cho Minh",
         defuse: "Cài kín vị trí này",
         "defuse-random": "Cài bom ngẫu nhiên",
-        combo: "Đánh 3 lá đã chọn",
-        reclaim: "Đánh 5 lá đã chọn",
+        combo: "Đánh 3 lá",
+        reclaim: "Đánh 5 lá",
       };
       await page
         .getByRole("button", { name: labels[state], exact: true })

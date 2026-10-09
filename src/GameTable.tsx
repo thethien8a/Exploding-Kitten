@@ -250,13 +250,13 @@ export function GameTable({
           </span>
           {game.idle && (
             <span role="timer" aria-label="Thời gian không hoạt động">
-              {idleName} · {Math.ceil(idleMs / 1000)} giây
-              {" — "}
+              {game.idle.playerId !== game.turn.playerId && idleName + " · "}
+              {Math.ceil(idleMs / 1000)}s ·{" "}
               {phase.kind === "favor"
-                ? "tự cho một lá khi hết giờ"
+                ? "Tự cho 1 lá"
                 : phase.kind === "defuse"
-                  ? "tự cài bom ngẫu nhiên khi hết giờ"
-                  : "tự rút bài khi hết giờ"}
+                  ? "Tự cài bom ngẫu nhiên"
+                  : "Tự rút bài"}
             </span>
           )}
         </div>
@@ -323,7 +323,7 @@ export function GameTable({
           <strong>Ván vẫn tiếp tục</strong>
           <p>
             {offlineMembers.map((member) => member.name).join(", ")} đang mất
-            kết nối. Đồng hồ vẫn chạy và lượt sẽ tự xử lý khi hết giờ.
+            kết nối.
           </p>
         </section>
       )}
@@ -429,7 +429,7 @@ export function GameTable({
                 <small>
                   {member.id === snapshot.hostId ? "Chủ phòng · " : ""}
                   {!member.alive
-                    ? "Đã nổ · Bị loại"
+                    ? "Bị loại"
                     : !member.connected
                       ? "Mất kết nối"
                       : member.cardCount + " lá"}
@@ -529,7 +529,7 @@ export function GameTable({
       {game.reaction && (
         <section className="reaction table-reaction" aria-label="Phản ứng Nope">
           <div>
-            <strong>Chờ Nope · {Math.ceil(reactionMs / 1000)} giây</strong>
+            <strong>Chờ Nope · {Math.ceil(reactionMs / 1000)}s</strong>
             <p>
               {phase.kind === "reaction" &&
                 (snapshot.members.find(
@@ -614,13 +614,9 @@ export function GameTable({
           >
             <strong>
               {phase.kind === "alter_future" ? "Sắp lại " : "Xem "}
-              {game.futureCards.length} lá trên cùng — chỉ bạn thấy
+              {game.futureCards.length} lá đầu · Chỉ bạn thấy
             </strong>
-            {phase.kind === "alter_future" && (
-              <p>
-                Lá số 1 sẽ được rút trước. Dùng nút Trước / Sau, rồi xác nhận.
-              </p>
-            )}
+            {phase.kind === "alter_future" && <p>Lá 1 được rút trước.</p>}
             <ol className="future-cards">
               {orderedFuture.map((card, index) => (
                 <li key={card.id}>
@@ -678,9 +674,7 @@ export function GameTable({
                 )
               }
             >
-              {phase.kind === "alter_future"
-                ? "Xác nhận thứ tự"
-                : "Đóng tương lai"}
+              {phase.kind === "alter_future" ? "Xác nhận thứ tự" : "Đóng"}
             </button>
           </section>
         )}
@@ -728,7 +722,7 @@ export function GameTable({
       )}
       <section className="hand-panel table-hand" aria-label="Tay bài của bạn">
         <div className="panel-heading">
-          <h2>Tay bài của bạn</h2>
+          <h2>Bài của bạn</h2>
           <span>{game.hand.length} lá · Chỉ bạn thấy</span>
         </div>
         {!me.alive && <p className="connection-note">Bạn đã bị loại.</p>}
@@ -838,9 +832,7 @@ export function GameTable({
         )}
         {myTurn && needsTarget && (
           <div className="target-controls">
-            <label htmlFor="target">
-              Mục tiêu ({CARD_NAMES.favor} / combo)
-            </label>
+            <label htmlFor="target">Mục tiêu</label>
             <select
               id="target"
               disabled={locked}
@@ -928,13 +920,15 @@ export function GameTable({
                   })
                 }
               >
-                Đánh {selected.length} lá đã chọn
+                {selected.length
+                  ? "Đánh " + selected.length + " lá"
+                  : "Đánh bài"}
               </button>
             )}
           </div>
         </div>
         <details className="public-discard">
-          <summary>Bài bỏ công khai ({game.discardPile.length})</summary>
+          <summary>Xem bài bỏ ({game.discardPile.length})</summary>
           <p>
             {game.discardPile
               .map((card) => CARD_NAMES[card.type])

@@ -1,17 +1,19 @@
-# Tài liệu triển khai Mèo Nổ theo phase
+# Tài liệu kỹ thuật và lịch sử phát triển Mèo Nổ
 
-Đây là lộ trình **dự kiến triển khai**, không phải mô tả một game đã chạy. [Kế hoạch gốc](../meo-no-implementation-plan.md) lưu đầy đủ phạm vi đã chốt, luật Original Edition, lựa chọn kiến trúc, ma trận kiểm thử và nguồn tham khảo; giữ nguyên để đối chiếu. Các file dưới đây tách công việc theo thứ tự thực hiện. Khi cần chi tiết luật hay quy ước online, đọc kế hoạch gốc, nhất là mục 1–4. Các thông số kỹ thuật được ghi là *đề xuất* chưa phải kết quả đo hay API đã triển khai.
+Hệ thống đã hoàn thiện chức năng và giao diện; **Phase 0–4 hoàn thành**, Phase 4 được chủ dự án nghiệm thu sau khi kiểm thử cùng nhóm người chơi ngày 09/10/2026. [README dự án](../README.md) mô tả cách chơi, luật nhóm hiện tại, cài đặt và vận hành. [PROGRESS](PROGRESS.md) ghi trạng thái, bằng chứng và lịch sử bàn giao.
 
-| Thứ tự | Tài liệu | Kết quả cần có trước khi chuyển phase |
+Các tài liệu phase lưu thiết kế và các mốc triển khai. [Kế hoạch gốc](../meo-no-implementation-plan.md) giữ nguyên để đối chiếu lịch sử; các quy tắc cũ như tay 8 lá, Attack cộng dồn hoặc pause khi offline đã được thay bằng luật hiện tại trong README, không dùng làm mô tả bản đang chạy.
+
+| Phase | Tài liệu | Nội dung / trạng thái |
 | --- | --- | --- |
-| 0 | [Nền tảng](phase-0-foundation.md) | Prototype hai trình duyệt, SQLite và WebSocket khôi phục sau restart; xác minh Free |
-| 1 | [Game engine](phase-1-engine.md) | Luật, bài, lượt và bất biến được kiểm thử độc lập mạng |
-| 2 | [Multiplayer](phase-2-multiplayer.md) | 3–5 phiên riêng, phòng và góc nhìn riêng, lệnh chống giả mạo/trùng |
-| 3 | [Khôi phục](phase-3-recovery.md) | Mọi giai đoạn tồn tại qua restart; pause/reconnect không mất hoặc lộ bài |
-| 4 | [Giao diện](phase-4-interface.md) | Chơi trọn ván trên desktop/điện thoại bằng giao diện tiếng Việt |
-| 5 | [Kiểm thử nhóm](phase-5-group-testing.md) | Ma trận tình huống đạt; ghi bằng chứng và sửa lỗi cản trở chơi |
-| 6 | [Deploy](phase-6-deployment.md) | Nhóm chơi qua link thật trên Free, reconnect/chơi ván mới được |
+| 0 | [Nền tảng](phase-0-foundation.md) | Hoàn thành — nền Cloudflare, SQLite và WebSocket |
+| 1 | [Game engine](phase-1-engine.md) | Hoàn thành — luật, bài, lượt và bất biến độc lập mạng |
+| 2 | [Multiplayer](phase-2-multiplayer.md) | Hoàn thành — 3–5 phiên riêng, phòng/bài kín, lệnh chống giả mạo và trùng |
+| 3 | [Khôi phục](phase-3-recovery.md) | Hoàn thành — lưu/khôi phục bài/lượt, chống thực hiện lại và vòng đời phòng |
+| 4 | [Giao diện](phase-4-interface.md) | Hoàn thành — giao diện đã được chủ dự án và nhóm người chơi nghiệm thu |
+| 5 | [Kiểm thử nhóm](phase-5-group-testing.md) | Đã có kiểm thử với nhóm; theo dõi ma trận chi tiết riêng trong PROGRESS |
+| 6 | [Deploy](phase-6-deployment.md) | Hướng dẫn triển khai và kiểm chứng hạ tầng; trạng thái vận hành ghi trong PROGRESS |
 
-[PROGRESS.md](PROGRESS.md) là nơi theo dõi **trạng thái và bằng chứng thực tế**, không suy ra tiến độ từ việc đã viết tài liệu. Khi bắt đầu một phase, đọc file phase, các mục được dẫn trong kế hoạch gốc và tiến độ; khi kết thúc, ghi kết quả kiểm chứng, vấn đề còn mở và bước tiếp theo vào PROGRESS. Chỉ đánh dấu hoàn thành khi có bằng chứng đáp ứng điều kiện ra phase. Các kiểm thử riêng từng phase không thay thế kiểm thử nhóm và triển khai ở phase 5–6.
+[PROGRESS.md](PROGRESS.md) phân biệt kiểm thử tự động, nghiệm thu do người dùng xác nhận và số đo hạ tầng. Những nhật ký có ngày phản ánh bản mã tại thời điểm đó, không ghi đè lịch sử để khớp bản mới. Nghiệm thu giao diện không tự suy ra quota, chi phí hoặc khả năng khôi phục qua deploy production.
 
-Nếu điều chỉnh kỹ thuật sau khi thử nghiệm, ghi quyết định, lý do và nơi thay đổi vào PROGRESS rồi sửa tài liệu phase liên quan. Không tự đổi luật, số người hay phạm vi đã chốt. Không dùng bảng giá hay API trong bản kế hoạch lập ngày 03/10/2026 mà không kiểm tra lại tài liệu chính thức tại lúc thực hiện.
+Khi thay đổi luật hoặc kỹ thuật, cập nhật README, phần trạng thái hiện tại và tài liệu liên quan; giữ bằng chứng và lý do trong nhật ký. Đối chiếu bảng giá/API chính thức tại lúc triển khai. Push, deploy và thay đổi hạ tầng vẫn cần được chấp thuận cho thao tác cụ thể.

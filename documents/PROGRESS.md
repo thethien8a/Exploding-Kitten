@@ -1,27 +1,28 @@
 # Tiến độ dự án Mèo Nổ
 
-## Trạng thái hiện tại — 06/10/2026 (Asia/Bangkok)
+## Trạng thái hiện tại — 09/10/2026 (Asia/Bangkok)
 
-- **Phase hiện tại:** Phase 2–3 hoàn thành nghiệm thu local; đã triển khai bàn oval B theo yêu cầu riêng thuộc Phase 4, chưa nghiệm thu toàn bộ Phase 4.
-- **Đã có:** multiplayer, bài kín, lưu/khôi phục mọi giai đoạn, pause/resume, heartbeat/alarm, hủy/tái đấu, expiry và bàn chơi riêng; đã sửa giữ lựa chọn sau rút, tự Nope, thông báo/cảnh báo mục tiêu Xin Bài/combo và xác nhận trước khi cho Xin Bài. Giữ trạng thái bom công khai, cài ngẫu nhiên và UI rút gọn. Theo phản hồi chơi nhóm, tay bài gom cùng loại, combo 2/3 báo riêng tên lá cho hai bên và ván mới tăng bài theo số người thay cho thêm cố định 24 lá. 185 test Vitest (96 luật + 89 phòng) và 30 test Playwright đạt, retries 0; TypeScript/build và format các file thay đổi đạt. `npm run format:check` còn báo file `vite.config.ts` có thay đổi từ trước; không sửa file ngoài phạm vi.
-- **Attack:** giữ nguyên trong đợt bàn giao này. Bản local đã kiểm chứng cộng dồn 2→4→6 và 5→7 sau restart; chưa tái hiện báo cáo bên ngoài. Người dùng đã chấp nhận bản hiện tại và yêu cầu push GitHub, không yêu cầu sửa thêm Attack.
-- **Giới hạn bằng chứng:** runtime Cloudflare local và mobile Chrome mô phỏng; chưa deploy, kiểm thử điện thoại/Safari thật, quota/CPU/hibernation sau eviction production hoặc khôi phục qua deploy. Không dùng bản thử làm bản phát hành công khai.
-- **Phạm vi bàn giao đợt này:** người dùng yêu cầu push `origin/main` các thay đổi gom tay bài, thông báo combo riêng tư và bộ bài theo số người, kèm test/tài liệu. Không đưa thay đổi `.gitignore`/`vite.config.ts` có sẵn hoặc dữ liệu/ảnh/log test vào commit. Chưa deploy hoặc xác minh bản đang expose dùng đầy đủ thay đổi mới; khi dùng preview cần frontend/Worker cùng phiên bản và bắt đầu ván mới để nhận bộ bài theo số người. Không tự khởi động lại preview/tunnel công khai; giữ `.wrangler/state/v3/`.
-- **Bổ sung đã bàn giao:** theo yêu cầu tiếp theo, đã bỏ hai nút Trên cùng/Dưới cùng, giữ thứ tự ô số → Ngẫu nhiên → xác nhận. Cho nhập số để chuyển lại từ Ngẫu nhiên. Đã kiểm chứng local và commit/push lên `origin/main` theo yêu cầu trong [67e8898](https://github.com/thethien8a/Exploding-Kitten/commit/67e8898922708eeeebd6fab8348756b7a3baee58); HEAD GitHub khớp local. Chưa deploy.
+- **Chức năng và giao diện:** đã hoàn thiện. Phase 0–4 hoàn thành; chủ dự án xác nhận đã kiểm thử hệ thống cùng nhóm người chơi và chấp nhận nghiệm thu Phase 4 ngày 09/10/2026.
+- **Đã có:** multiplayer 3/4/5 người, bài kín, bàn oval desktop/mobile, gom tay bài, combo 2/3/5, thông báo mục tiêu/bom, xác nhận cho bài/cài bom, Nope, heartbeat/alarm, lưu/khôi phục, hủy/tái đấu và expiry. Ván mới pha Alter the Future, Reverse, Draw from the Bottom và thêm 2 Defuse dư; mỗi người bắt đầu với 5 lá gồm 1 Defuse bảo đảm và 4 lá ngẫu nhiên. Tên bài hiển thị bằng tiếng Anh, hướng dẫn bằng tiếng Việt.
+- **Luật hiện tại:** Attack không cộng dồn, luôn chuyển đúng 2 lượt cho người kế tiếp. Nope 5 giây; 60 giây không thực hiện thao tác chơi hợp lệ thì tự rút hoặc xử lý lựa chọn đang chờ. Offline/rời ván không đóng băng hay gia hạn đồng hồ; người bị loại rời không ảnh hưởng ván. Ván đã lưu giữ nguyên bài khi khôi phục.
+- **UI tối giản:** bỏ khẩu hiệu/chú thích lặp, hướng dẫn ba bước và mẹo trang trí; mặt bài chỉ có biểu tượng/tên. Rút gọn nhãn thao tác và countdown, vẫn giữ mục tiêu, quyền riêng tư, lỗi và xác nhận trao bài/cài bom.
+- **Kiểm chứng tự động:** 275 test Vitest và 36 kịch bản Playwright đạt, retries 0, không skipped/flaky; TypeScript/build/format và `git diff --check` đạt. Đã kiểm tra timeout 60 giây thật, tiếp tục khi offline, reconnect và render 1280/390/320px.
+- **Bàn giao mã:** đã commit/push lên `origin/main` theo yêu cầu trong [cfb2e3a](https://github.com/thethien8a/Exploding-Kitten/commit/cfb2e3a120e49ebf988fb06ec062a3f0fe297102). Không chạy deploy thủ công trong đợt bàn giao này, không đưa dữ liệu SQLite, phiên hoặc ảnh/log kiểm thử vào Git.
+- **Phạm vi bằng chứng:** nghiệm thu sử dụng dựa trên xác nhận của chủ dự án và nhóm; kiểm thử tự động chạy qua runtime Cloudflare local và Chrome/mobile viewport mô phỏng. Chưa có bản ghi chi tiết thiết bị/ca thử nhóm hoặc số đo quota, CPU, độ trễ, eviction và khôi phục qua deploy trong tài liệu. Nghiệm thu Phase 4 không tự suy ra nghiệm thu hạ tầng.
 
 ## Theo dõi phase
 
-Trạng thái dùng: **chưa bắt đầu**, **đang thực hiện**, **chờ kiểm chứng**, **bị chặn**, **hoàn thành**. Chỉ dùng **hoàn thành** khi điều kiện ra phase đã được chứng minh bằng kết quả thực tế. Không coi việc tạo file hay chạy lệnh không lỗi là đã đạt.
+Trạng thái dùng: **chưa bắt đầu**, **đang thực hiện**, **chờ kiểm chứng**, **bị chặn**, **hoàn thành**. Nghiệm thu có thể dựa trên kiểm chứng tự động hoặc xác nhận sử dụng thực tế của chủ dự án; ghi rõ nguồn và phạm vi. Các số test ở hàng 0–3 là mốc lịch sử, kết quả bản hiện tại được ghi ở trên.
 
 | Phase | Trạng thái | Bằng chứng nghiệm thu | Trở ngại / bước tiếp theo |
 | --- | --- | --- | --- |
 | 0 — Nền tảng | Hoàn thành (đã push) | Kiểm tra lại: `2 passed (9.6s)`; TypeScript/build/format đạt; push `main` thành công | Quota và hibernation production chưa kiểm chứng |
 | 1 — Game engine | Hoàn thành | `92 passed`; 36 ván tới thắng; TypeScript/build/format đạt; hồi quy nền `2 passed (8.3s)` | Đã nối vào multiplayer ở Phase 2; không đổi luật/engine trong Phase 2–3 |
 | 2 — Multiplayer | Hoàn thành (local, đã push) | `134 passed`; Playwright `7 passed (27.2s)`; 3/4/5 phiên độc lập, payload riêng, chống trùng, quyền, deadline và rate limit | Chưa deploy; recovery đã nghiệm thu tiếp ở Phase 3 |
-| 3 — Khôi phục | Hoàn thành (local, đã push) | `153 passed`; Playwright `19 passed`, retries 0; restart 5 giai đoạn, mất ACK rút/xáo, rollback SQLite, heartbeat, pause, vòng đời, migration và TTL | Chưa deploy; điện thoại/hibernation production chưa thử; tiếp theo Phase 4 |
-| 4 — Giao diện | Đang thực hiện (phần bàn B đạt local) | `185 passed`; Playwright `30 passed`; bàn 3/4/5 ghế, gom tay bài, kết quả combo riêng tư, mục tiêu/bom công khai, xác nhận cho bài, cài ngẫu nhiên, bài theo số người và recovery; đã inspect ảnh render | Chưa nghiệm thu toàn bộ UX/điện thoại thật |
-| 5 — Kiểm thử nhóm | Đang thực hiện theo báo cáo người dùng | Người dùng đã expose bản thử và gửi bốn phản hồi; ba thay đổi đạt kiểm thử local | Thử lại với nhóm trên bản mới; báo cáo Attack bên ngoài chưa tái hiện, luật giữ nguyên; chưa nghiệm thu production |
-| 6 — Deploy | Chưa bắt đầu | Chưa có | Chờ phase 5 và chấp thuận thao tác deploy |
+| 3 — Khôi phục | Hoàn thành (local, đã push) | Mốc ban đầu: `153 passed`, Playwright `19 passed`; bản hiện tại tiếp tục khi offline, giữ deadline và khôi phục bài/lượt, không còn pause | Kiểm chứng khôi phục qua deploy được theo dõi riêng ở Phase 6 |
+| 4 — Giao diện | Hoàn thành — chủ dự án nghiệm thu 09/10/2026 | Chủ dự án và nhóm đã kiểm thử hệ thống; 275 test Vitest và 36 kịch bản Playwright đạt, đã inspect render desktop/mobile và các trạng thái riêng | Duy trì hồi quy khi bổ sung tính năng |
+| 5 — Kiểm thử nhóm | Đang thực hiện; đã có kiểm thử với nhóm | Chủ dự án xác nhận nhóm đã test hệ thống và nghiệm thu giao diện; các phản hồi về luật/bộ bài/offline đã triển khai | Chưa ghi ma trận thiết bị/ca thử chi tiết để nghiệm thu riêng toàn bộ Phase 5 |
+| 6 — Deploy | Chưa ghi nhận nghiệm thu hạ tầng | Mã đã push GitHub; chưa có hồ sơ URL, quota hoặc smoke test môi trường deploy trong tài liệu | Ghi nhận môi trường vận hành khi có; thao tác deploy cần chấp thuận riêng |
 
 ## Quy tắc cập nhật và bàn giao
 
@@ -353,6 +354,24 @@ Hạn mức công bố khi kiểm tra: Worker động 100.000 request/ngày, 10 
 - **Bằng chứng:** `.amp/in/artifacts/player-feedback/final-test.log`, `first-full-test.log`, `first-full-results.json`, `initial-results.json`; ảnh `transfer-desktop.png`, `transfer-mobile-320.png`, `sorted-hand.png`, `transfer-missed-320.png`, `home-320.png` trong cùng thư mục. Kết quả Playwright cuối ở `.amp/in/artifacts/playwright-results.json`.
 - **Bàn giao:** local edits, chưa commit/push/deploy hoặc khởi động lại preview/tunnel công khai. Giữ dữ liệu thủ công và thay đổi `.gitignore`/`vite.config.ts` có sẵn; runtime/SQLite test đã đóng/dọn. Bước tiếp theo là xác nhận ý của mục Attack, sau đó thử lại với nhóm trên bản mới khi được cập nhật.
 - **Yêu cầu tiếp theo:** người dùng chấp nhận bản hiện tại và yêu cầu push GitHub. Giữ Attack không đổi; chỉ bàn giao mã/test/tài liệu của ba thay đổi, không deploy hoặc khởi động lại hệ thống công khai.
+
+### 09/10/2026 — Luật nhóm, tiếp tục khi offline và nghiệm thu Phase 4
+
+- **Bản hiện tại:** Attack không cộng dồn; combo 5 lá khác loại; thêm Alter the Future, Reverse, Draw from the Bottom và 2 Defuse dư. Ván mới chia 5 lá/người, tên bài tiếng Anh; chồng rút 3/4/5 người là 49/60/70. Ván đã lưu không bị chia lại hoặc cắt bài.
+- **Không hoạt động/offline:** server lưu hạn 60 giây và tự rút hoặc xử lý lựa chọn khi hết giờ. Nope giữ cửa sổ 5 giây; rời/mất kết nối không pause hay reset hạn, người bị loại rời không gián đoạn ván. Tab trở lại nhận cả lá đã tự rút; sửa reschedule alarm và resume socket theo các lỗi tái hiện qua browser thật.
+- **Kiểm chứng:** `PLAYWRIGHT_CHANNEL=chrome npm test` đạt 275 Vitest và 36 Playwright (`3.5m`), retries 0, không skipped/flaky; TypeScript/build/format đạt. Log `.amp/in/artifacts/mixed-offline-full-tests.log`; ảnh desktop/mobile và bằng chứng offline/reconnect trong `.amp/in/artifacts/`. Không đưa artifacts vào Git.
+- **Bàn giao mã:** push `origin/main` thành công trong [cfb2e3a](https://github.com/thethien8a/Exploding-Kitten/commit/cfb2e3a120e49ebf988fb06ec062a3f0fe297102), remote khớp HEAD local. Không chạy deploy thủ công.
+- **Nghiệm thu Phase 4:** chủ dự án xác nhận đã cùng nhóm người chơi test hệ thống và yêu cầu coi Phase 4 hoàn thành. Ghi nhận nghiệm thu sử dụng theo xác nhận này, không tự suy ra thiết bị cụ thể, ma trận Phase 5 hoặc số đo hạ tầng production.
+- **Tài liệu:** README chuyển sang giới thiệu hệ thống hoàn thiện, tính năng, cách chơi và vận hành; đồng bộ trạng thái Phase 4. Giữ các nhật ký cũ làm lịch sử, dùng README và phần trạng thái hiện tại cho hành vi đang chạy.
+
+### 09/10/2026 — Rút gọn UI và bàn giao tài liệu hoàn thiện
+
+- **Theo yêu cầu:** bỏ các khẩu hiệu phụ, nhãn kỹ thuật ở header, hướng dẫn ba bước và mẹo trang trí ở trang đầu/phòng chờ. Giữ một câu giới thiệu ngắn, form, thông tin người chơi và thao tác chính; minh họa trang đầu chỉ còn biểu tượng.
+- **Bàn chơi:** bỏ nhãn loại trên mặt bài, giữ biểu tượng/tên tiếng Anh và mô tả khi chọn. Nhãn ngắn hơn cho tay bài, mục tiêu, nút đánh, bài bỏ và lựa chọn tương lai; countdown ghi số giây và hành động tự động. Không lặp tên người đang tới lượt trên timer, nhưng giữ tên người phải cho Favor khi khác người tới lượt. Giữ lượt nợ, chiều/người tiếp theo, mục tiêu, thông báo riêng tư, cảnh báo bom, lỗi và xác nhận. Không sửa luật, Worker hoặc dữ liệu ván.
+- **Kiểm chứng:** lần đầy đủ đầu đạt 275 Vitest và 35/36 Playwright; ca hết hạn còn tìm tên link cũ. Trace xác nhận link mới và thông báo hết hạn đúng; cập nhật tên link trong test, không bỏ kiểm tra. Lần đầy đủ sau đạt 275 Vitest + 36 Playwright (`3.6m`), retries 0, không skipped/flaky. Sau lần cuối rút chữ minh họa, build/TypeScript/format và 6 ca UI/runtime liên quan đạt (`22.0s`); `git diff --check`, 20 link Markdown local và code fence đạt.
+- **Render:** đã kiểm tra desktop 1280px và mobile 390/320px ở trang đầu, link mời, phòng chờ, bàn chơi, Nope, See/Alter the Future, Favor, cài bom, combo, offline, bị loại/kết thúc và hết hạn. Sửa nút đánh bị xuống dòng và ảnh chụp sau resize/cuộn; không đổi màu hoặc bố cục chính. Tay bài vẫn cuộn ngang, ô link vẫn chọn/sao chép được URL đầy đủ.
+- **Bằng chứng:** `.amp/in/artifacts/compact-ui-final-tests.log`, `compact-ui-full-results.json`, `compact-ui-final-render.log`, `compact-ui-final-render-results.json`; các ảnh cuối trong `.amp/in/artifacts/compact-ui/`. Log lần đầu giữ trong `compact-ui-full-tests.log` và `compact-ui-first-results.json`; không đưa artifacts vào Git.
+- **Bàn giao:** chủ dự án yêu cầu push `origin/main` tài liệu và UI rút gọn; không deploy hoặc khởi động lại hệ thống công khai. Runtime và SQLite test đã đóng/dọn; giữ dữ liệu thủ công `.wrangler/state/v3/`.
 
 ### Mẫu cho lần cập nhật tiếp theo
 

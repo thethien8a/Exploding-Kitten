@@ -200,23 +200,6 @@ small {
 .brand-dot {
   color: var(--accent);
 }
-.phase {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 9px 13px;
-  border: 1px solid #cbd3ad;
-  border-radius: 100px;
-  background: var(--lime);
-  white-space: nowrap;
-}
-.eyebrow {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .entry-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
@@ -239,23 +222,6 @@ small {
   font-size: 14px;
   margin: 0;
 }
-.hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
-  margin-top: 20px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.hero-meta > span::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  margin: 0 7px 1px 0;
-}
 .hero-art {
   position: relative;
   width: 440px;
@@ -277,7 +243,7 @@ small {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 22px 18px;
   width: 150px;
   height: 204px;
@@ -286,17 +252,12 @@ small {
   box-shadow: 4px 5px 0 #183b2f14;
 }
 .hero-card strong {
-  font-family: var(--display);
-  font-size: 25px;
-  line-height: 1.1;
+  display: none;
 }
 .hero-card .card-symbol,
 .hero-card .cat-mark {
   width: 62px;
   height: 62px;
-}
-.hero-card .card-kind {
-  font-size: 9px;
 }
 .hero-card-cat {
   left: 26px;
@@ -319,20 +280,6 @@ small {
   background: var(--lime);
   transform: rotate(17deg);
 }
-.art-sticker {
-  position: absolute;
-  left: 135px;
-  bottom: 1px;
-  padding: 8px 15px;
-  border: 1px solid var(--ink);
-  border-radius: 100px;
-  background: var(--surface);
-  font-family: var(--display);
-  font-size: 17px;
-  font-weight: 700;
-  transform: rotate(-5deg);
-  z-index: 3;
-}
 .entry-panel,
 .counter-panel,
 .controls {
@@ -348,12 +295,7 @@ small {
 }
 .entry-panel h2 {
   font-size: 38px;
-  margin-top: 8px;
-}
-.panel-description {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 8px 0 26px;
+  margin: 0 0 24px;
 }
 label {
   display: block;
@@ -432,12 +374,6 @@ form > button {
   font-size: 21px;
   line-height: 1;
 }
-.form-hint {
-  font-size: 10px;
-  text-align: center;
-  color: var(--muted);
-  margin: 16px 0 0;
-}
 .invitation-state {
   font-size: 13px;
   padding: 12px;
@@ -459,38 +395,6 @@ form > button {
 .text-button:hover {
   color: var(--accent);
 }
-.entry-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 26px;
-  margin: 0;
-  padding: 28px 0 8px;
-  list-style: none;
-  border-top: 1px solid var(--line);
-}
-.entry-steps li {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.entry-steps li > span {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  border: 1px solid #cad1ba;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 600;
-}
-.entry-steps strong {
-  font-size: 12px;
-}
-.entry-steps small {
-  font-size: 10px;
-  margin-top: 3px;
-}
 .lobby-intro {
   display: flex;
   align-items: flex-end;
@@ -500,11 +404,6 @@ form > button {
 }
 .lobby-intro h1 {
   margin: 8px 0;
-}
-.lobby-intro p {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0;
 }
 .lobby-room-code {
   font-size: 10px;
@@ -653,21 +552,6 @@ form > button {
 .room-settings {
   border-top: 1px solid var(--line);
   margin-top: 26px;
-}
-.lobby-tip {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-top: 26px;
-  padding: 18px;
-  background: #edf0df;
-  border-radius: 14px;
-  font-size: 11px;
-  line-height: 1.8;
-}
-.lobby-tip .cat-mark {
-  width: 40px;
-  height: 40px;
 }
 .error {
   border: 1px solid #e2bda6;
@@ -1033,7 +917,7 @@ form > button {
   border: 1px solid var(--card-border);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   gap: 8px;
   padding: 12px;
@@ -1088,14 +972,6 @@ form > button {
   font-weight: 700;
   font-size: 17px;
   line-height: 1.1;
-}
-.card-kind {
-  font-size: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  line-height: 1.3;
-  flex-shrink: 0;
 }
 .card-symbol {
   width: 44px;
@@ -1386,6 +1262,7 @@ form > button {
 .hand-actions .increment {
   padding: 12px 24px;
   font-size: 12px;
+  white-space: nowrap;
 }
 .card-help {
   margin: 0 0 12px;
@@ -1476,10 +1353,6 @@ summary {
   .intro > p {
     margin: 0 auto;
   }
-  .hero-meta {
-    justify-content: center;
-    margin-top: 16px;
-  }
   .hero-art {
     display: none;
   }
@@ -1490,12 +1363,6 @@ summary {
   }
   .workspace {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .entry-steps {
-    gap: 20px;
-  }
-  .entry-steps li {
-    gap: 10px;
   }
   .lobby-room-code {
     display: none;
@@ -1522,20 +1389,11 @@ summary {
     width: 28px;
     height: 28px;
   }
-  .phase {
-    font-size: 8px;
-    padding: 8px 10px;
-    letter-spacing: 0.04em;
-  }
   .intro h1 {
     font-size: 54px;
   }
   .intro > p {
     font-size: 12px;
-  }
-  .hero-meta {
-    font-size: 10px;
-    gap: 14px;
   }
   .entry-panel,
   .counter-panel,
@@ -1545,18 +1403,6 @@ summary {
   }
   .entry-panel h2 {
     font-size: 34px;
-  }
-  .panel-description {
-    font-size: 12px;
-    margin-bottom: 22px;
-  }
-  .entry-steps {
-    grid-template-columns: minmax(0, 1fr);
-    padding-top: 22px;
-    gap: 20px;
-  }
-  .entry-steps li {
-    gap: 14px;
   }
   .lobby-intro {
     padding: 30px 0 22px;
@@ -1708,10 +1554,6 @@ summary {
   .table-card strong {
     font-size: 14px;
   }
-  .table-card .card-kind {
-    font-size: 6px;
-    letter-spacing: 0.03em;
-  }
   .table-card .card-symbol {
     width: 31px;
     height: 31px;
@@ -1749,9 +1591,6 @@ summary {
   }
   .card strong {
     font-size: 15px;
-  }
-  .card .card-kind {
-    font-size: 7px;
   }
   .card .card-symbol {
     width: 36px;
