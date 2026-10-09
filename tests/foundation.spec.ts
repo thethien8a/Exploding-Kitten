@@ -174,6 +174,16 @@ for (const capacity of [3, 4, 5]) {
           host.getByRole("heading", { name: /Lá bài nhỏ.*Cú nổ lớn/ }),
         ).toBeVisible();
         if (capacity === 3) {
+          await expect(host.getByRole("contentinfo")).toContainText(
+            "Game được phát triển bởi: Thế Thiện",
+          );
+          const facebook = host.getByRole("link", { name: "Liên hệ Facebook" });
+          await expect(facebook).toHaveAttribute(
+            "href",
+            "https://www.facebook.com/zodra.hidramatic",
+          );
+          await expect(facebook).toHaveAttribute("target", "_blank");
+          await expect(facebook).toHaveAttribute("rel", "noopener noreferrer");
           for (const width of [1280, 900, 390, 320]) {
             await host.setViewportSize({ width, height: 844 });
             expect(
@@ -306,6 +316,9 @@ for (const capacity of [3, 4, 5]) {
         }
         await expect(host.locator(".actions .connection-note")).toHaveCount(0);
         if (capacity === 3) {
+          await expect(host.getByRole("contentinfo")).toContainText(
+            "Game được phát triển bởi: Thế Thiện",
+          );
           await host.screenshot({
             path: testInfo.outputPath("phase-2-lobby-desktop.png"),
             fullPage: true,
@@ -333,6 +346,9 @@ for (const capacity of [3, 4, 5]) {
           await expect(
             page.getByRole("heading", { name: "Phòng chờ", exact: true }),
           ).toHaveCount(0);
+          await expect(page.getByRole("contentinfo")).toContainText(
+            "Game được phát triển bởi: Thế Thiện",
+          );
           await expect(page.locator(".table-turn")).not.toContainText("1 lượt");
           await expect(
             page.locator(".hand-actions .connection-note, .card .eyebrow"),

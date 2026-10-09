@@ -670,4 +670,21 @@ function App() {
     </main>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <>
+    <App />
+    <footer className="author-credit">
+      <span>
+        Game được phát triển bởi: <strong>Thế Thiện</strong>
+      </span>
+      <a
+        className="text-button"
+        href="https://www.facebook.com/zodra.hidramatic"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Liên hệ Facebook
+      </a>
+    </footer>
+  </>,
+);

@@ -395,6 +395,27 @@ form > button {
 .text-button:hover {
   color: var(--accent);
 }
+.author-credit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 20px 24px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.author-credit strong {
+  color: var(--ink);
+  white-space: nowrap;
+}
+.author-credit .text-button {
+  margin-top: 0;
+}
 .lobby-intro {
   display: flex;
   align-items: flex-end;
